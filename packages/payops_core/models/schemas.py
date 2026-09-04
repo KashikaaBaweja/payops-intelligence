@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TimeWindow(BaseModel):
@@ -87,13 +87,69 @@ class ResearcherResult(BaseModel):
     rejected_count: int = 0
 
 
+AnalyticsOperation = Literal[
+    "get_success_rate",
+    "get_failure_rate",
+    "breakdown_by_method",
+    "breakdown_by_error_code",
+    "compare_time_windows",
+    "compare_merchants",
+    "get_refund_rate",
+    "get_dispute_rate",
+    "get_webhook_failure_rate",
+]
+
+
+class AnalyticsRequest(BaseModel):
+    """Validated catalog call. Extra fields (including raw SQL) are rejected."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operation: AnalyticsOperation
+    window: TimeWindow
+    merchant_id: str | None = None
+    method_id: str | None = None
+    compare_merchant_id: str | None = None
+    previous_window: TimeWindow | None = None
+    compare_metric: Literal["success_rate", "failure_rate"] = "success_rate"
+
+
 class MetricResult(BaseModel):
+    metric: str
+    value: float | dict[str, Any]
+    window: TimeWindow | None = None
+    filters: dict[str, Any] = Field(default_factory=dict)
+    tool: str = "sql_gateway"
+    source: str = "payments"
     operation: str
     merchant_id: str | None = None
-    window: TimeWindow | None = None
-    value: float | dict[str, Any]
     unit: str = "ratio"
     notes: str | None = None
+    sample_size: int | None = None
+
+    def to_evidence(self) -> EvidenceItem:
+        return EvidenceItem(
+            evidence_id=f"metric-{self.operation}-{self.merchant_id or 'all'}",
+            source="metric",
+            score=None,
+            text_snippet=f"{self.metric}={self.value}",
+            metadata={
+                "metric": self.metric,
+                "operation": self.operation,
+                "tool": self.tool,
+                "source": self.source,
+                "filters": self.filters,
+                "sample_size": self.sample_size,
+            },
+        )
+
+
+class AnalystResult(BaseModel):
+    """Metric evidence only. This is not a final investigation report."""
+
+    question: str
+    operations: list[str] = Field(default_factory=list)
+    metrics: list[MetricResult] = Field(default_factory=list)
 
 
 class Hypothesis(BaseModel):

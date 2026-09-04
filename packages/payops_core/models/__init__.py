@@ -1,4 +1,6 @@
 from payops_core.models.schemas import (
+    AnalystResult,
+    AnalyticsRequest,
     CritiqueResult,
     EvidenceBundle,
     EvidenceGap,
@@ -20,6 +22,8 @@ from payops_core.models.schemas import (
 )
 
 __all__ = [
+    "AnalystResult",
+    "AnalyticsRequest",
     "CritiqueResult",
     "EvidenceBundle",
     "EvidenceGap",

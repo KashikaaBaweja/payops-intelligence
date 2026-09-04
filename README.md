@@ -1,6 +1,6 @@
 # PayOps Intelligence
 
-Autonomous investigation agent for payment operations. This repository is at **Phase 4**: Researcher Agent on top of the RAG pipeline.
+Autonomous investigation agent for payment operations. This repository is at **Phase 5**: Data Analyst Agent with a fixed SQL analytics catalog.
 
 See [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).
 
@@ -11,6 +11,7 @@ See [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).
 - Deterministic fictional seed data (no real customer information)
 - Document ingestion (PDF, Markdown, TXT, JSON), chunking, embeddings, and retrieval
 - Researcher Agent: question → search queries → retrieved, source-backed evidence (no final answer)
+- Data Analyst Agent: validated payment metrics via a SQL tool catalog (no raw SQL, no final report)
 - Shared Pydantic investigation contracts (unused until later phases)
 
 The Writer Agent and LangGraph orchestration are not implemented yet.
