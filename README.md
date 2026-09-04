@@ -1,6 +1,6 @@
 # PayOps Intelligence
 
-Autonomous investigation agent for payment operations. This repository is at **Phase 3**: document ingestion and RAG foundation.
+Autonomous investigation agent for payment operations. This repository is at **Phase 4**: Researcher Agent on top of the RAG pipeline.
 
 See [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).
 
@@ -10,9 +10,10 @@ See [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).
 - PostgreSQL-compatible SQLAlchemy models and Alembic migrations
 - Deterministic fictional seed data (no real customer information)
 - Document ingestion (PDF, Markdown, TXT, JSON), chunking, embeddings, and retrieval
+- Researcher Agent: question → search queries → retrieved, source-backed evidence (no final answer)
 - Shared Pydantic investigation contracts (unused until later phases)
 
-Agents are not implemented yet.
+The Writer Agent and LangGraph orchestration are not implemented yet.
 
 ## Quick start
 

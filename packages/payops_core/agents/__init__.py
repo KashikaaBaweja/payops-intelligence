@@ -1,1 +1,3 @@
-"""Agent modules are introduced in a later phase. This package is a structural placeholder."""
+from payops_core.agents.researcher import ResearcherAgent
+
+__all__ = ["ResearcherAgent"]

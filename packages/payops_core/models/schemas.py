@@ -72,6 +72,21 @@ class EvidenceBundle(BaseModel):
         return [item.evidence_id for item in self.items]
 
 
+class SearchQuery(BaseModel):
+    query: str
+    doc_type: str | None = None
+    rationale: str = ""
+
+
+class ResearcherResult(BaseModel):
+    """Retrieved evidence only. This is not a final investigation answer."""
+
+    question: str
+    queries: list[SearchQuery] = Field(default_factory=list)
+    evidence: EvidenceBundle = Field(default_factory=EvidenceBundle)
+    rejected_count: int = 0
+
+
 class MetricResult(BaseModel):
     operation: str
     merchant_id: str | None = None
