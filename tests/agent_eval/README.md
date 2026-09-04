@@ -1,1 +1,3 @@
-"""Reserved for later-phase agent evaluation tests."""
+# Agent evaluation tests
+
+Pytest entry for the investigation eval suite. See `eval/README.md`.
