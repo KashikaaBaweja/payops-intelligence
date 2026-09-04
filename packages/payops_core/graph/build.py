@@ -13,7 +13,9 @@ from payops_core.graph.nodes import (
     investigate_node,
     planner_node,
     refine_node,
+    route_after_critic,
     route_after_sufficiency,
+    route_after_verifier,
     sufficiency_node,
     verifier_node,
     writer_node,
@@ -35,6 +37,7 @@ def initial_state(question: str, max_iterations: int) -> InvestigationState:
         "hypotheses": [],
         "sufficiency": None,
         "verified_claims": [],
+        "verification": None,
         "critique": None,
         "report": None,
         "trace": [],
@@ -74,9 +77,23 @@ def build_investigation_graph(runtime: GraphRuntime):
     )
     graph.add_edge("refine", "investigate")
     graph.add_edge("incident_risk", "verifier")
-    graph.add_edge("verifier", "critic")
-    graph.add_edge("critic", "writer")
-    graph.add_edge("writer", END)
+    graph.add_conditional_edges(
+        "verifier",
+        route_after_verifier,
+        {
+            "refine": "refine",
+            "writer": "writer",
+        },
+    )
+    graph.add_edge("writer", "critic")
+    graph.add_conditional_edges(
+        "critic",
+        route_after_critic,
+        {
+            "writer": "writer",
+            "end": END,
+        },
+    )
     return graph.compile()
 
 

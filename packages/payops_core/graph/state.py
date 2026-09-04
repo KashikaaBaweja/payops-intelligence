@@ -14,6 +14,7 @@ from payops_core.models.schemas import (
     Task,
     TimeWindow,
     TraceEvent,
+    VerificationResult,
     VerifiedClaim,
 )
 
@@ -30,6 +31,7 @@ class InvestigationState(TypedDict, total=False):
     hypotheses: list[Hypothesis]
     sufficiency: SufficiencyVerdict | None
     verified_claims: list[VerifiedClaim]
+    verification: VerificationResult | None
     critique: CritiqueResult | None
     report: IncidentReport | None
     trace: Annotated[list[TraceEvent], operator.add]

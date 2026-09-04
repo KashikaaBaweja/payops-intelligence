@@ -252,7 +252,18 @@ class VerifiedClaim(BaseModel):
     claim: str
     evidence_ids: list[str]
     supported: bool
+    critical: bool = False
+    issues: list[Literal["unsupported", "contradictory", "missing", "weak"]] = Field(
+        default_factory=list
+    )
     note: str | None = None
+
+
+class VerificationResult(BaseModel):
+    claims: list[VerifiedClaim] = Field(default_factory=list)
+    needs_more_evidence: bool = False
+    gaps: list[EvidenceGap] = Field(default_factory=list)
+    status: Literal["supported", "unsupported", "contradictory", "weak", "missing"] = "unsupported"
 
 
 class CritiqueResult(BaseModel):

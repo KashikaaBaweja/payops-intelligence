@@ -141,8 +141,13 @@ def refine_node(state: InvestigationState) -> dict:
                 )
             ]
         }
+    gaps = []
     verdict = state.get("sufficiency")
-    gaps = list(verdict.missing) if verdict else []
+    if verdict is not None:
+        gaps.extend(verdict.missing)
+    verification = state.get("verification")
+    if verification is not None:
+        gaps.extend(verification.gaps)
     extra = [task_from_gap(gap, index) for index, gap in enumerate(gaps)]
     return {
         "pending_tasks": extra,
@@ -176,20 +181,21 @@ def incident_node(state: InvestigationState) -> dict:
 
 
 def verifier_node(state: InvestigationState) -> dict:
-    claims = VerifierAgent().verify(
+    result = VerifierAgent().verify(
         state.get("hypotheses") or [],
         state.get("evidence") or EvidenceBundle(),
     )
-    status = "supported" if claims and all(claim.supported for claim in claims) else "unsupported"
+    decision = "investigate" if result.needs_more_evidence else result.status
     return {
-        "verified_claims": claims,
+        "verified_claims": result.claims,
+        "verification": result,
         "trace": [
             safe_trace(
                 node="verifier",
                 action="verify",
-                evidence_ids=[item for claim in claims for item in claim.evidence_ids],
-                decision=status,
-                verification_status=status,
+                evidence_ids=[item for claim in result.claims for item in claim.evidence_ids],
+                decision=decision,
+                verification_status=result.status,
             )
         ],
     }
@@ -201,6 +207,7 @@ def critic_node(state: InvestigationState) -> dict:
         state.get("plan"),
         state.get("sufficiency"),
         state.get("verified_claims") or [],
+        state.get("report"),
     )
     return {
         "critique": critique,
@@ -216,6 +223,9 @@ def critic_node(state: InvestigationState) -> dict:
 
 
 def writer_node(state: InvestigationState) -> dict:
+    revisions = int(state.get("critic_revisions") or 0)
+    if state.get("critique") is not None:
+        revisions += 1
     report = WriterAgent().write(
         question=state["question"],
         merchant_id=state.get("merchant_id"),
@@ -232,6 +242,7 @@ def writer_node(state: InvestigationState) -> dict:
     )
     return {
         "report": report,
+        "critic_revisions": revisions,
         "trace": [
             safe_trace(
                 node="writer",
@@ -255,6 +266,29 @@ def route_after_sufficiency(state: InvestigationState) -> str:
     if iteration >= maximum:
         return "writer"
     return "refine"
+
+
+def route_after_verifier(state: InvestigationState) -> str:
+    if state.get("timed_out") or state.get("error"):
+        return "writer"
+    verification = state.get("verification")
+    iteration = int(state.get("iteration") or 0)
+    maximum = int(state.get("max_iterations") or 1)
+    if (
+        verification is not None
+        and verification.needs_more_evidence
+        and iteration < maximum
+    ):
+        return "refine"
+    return "writer"
+
+
+def route_after_critic(state: InvestigationState) -> str:
+    critique = state.get("critique")
+    revisions = int(state.get("critic_revisions") or 0)
+    if critique is not None and not critique.approved and revisions < 1:
+        return "writer"
+    return "end"
 
 
 def _run_task(

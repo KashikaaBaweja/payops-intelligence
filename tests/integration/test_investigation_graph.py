@@ -118,6 +118,39 @@ def test_insufficient_evidence_retry(graph_deps) -> None:
     assert report.evidence_sufficient is True
 
 
+def test_unsupported_conclusion_requests_more_investigation(graph_deps, monkeypatch) -> None:
+    from payops_core.agents.incident import IncidentRiskAgent
+    from payops_core.models.schemas import Hypothesis
+
+    def _incorrect(_self, evidence, _metrics, _question):
+        return [
+            Hypothesis(
+                cause="The outage was caused by a lunar radiation event",
+                supporting_evidence_ids=list(evidence.ids()[:1]),
+                confidence=0.95,
+                category="processor",
+            )
+        ]
+
+    monkeypatch.setattr(IncidentRiskAgent, "propose", _incorrect)
+    state = _run(graph_deps, "What does GATEWAY_TIMEOUT mean?")
+    report = report_from(state)
+    _assert_safe_trace(state)
+    nodes = _nodes(state)
+    assert "verifier" in nodes
+    assert "refine" in nodes
+    assert nodes.index("verifier") < nodes.index("refine")
+    assert any(
+        event.node == "refine" and event.action == "queue_gaps"
+        for event in state["trace"]
+    )
+    assert state.get("verification") is not None
+    assert state["verification"].needs_more_evidence is True
+    assert report.evidence_sufficient is False
+    assert "lunar radiation" not in report.likely_cause.cause
+    assert any("Verifier:" in finding for finding in report.findings)
+
+
 def test_maximum_loop_termination(graph_deps) -> None:
     state = _run(
         graph_deps,
