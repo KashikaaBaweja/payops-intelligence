@@ -1,10 +1,10 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from payops_core.data.models import Merchant
 from payops_core.models.api import ErrorResponse, MerchantMetricsResponse
-from payops_core.models.schemas import AnalyticsRequest, MerchantHealthScore
+from payops_core.models.schemas import AnalyticsOperation, AnalyticsRequest, MerchantHealthScore
 from payops_core.tools.merchant_health import score_merchant
 from payops_core.tools.sql_gateway import ALLOWED_OPERATIONS, SqlToolGateway
 from sqlalchemy.orm import Session
@@ -15,7 +15,7 @@ from apps.api.store import InvestigationStore
 
 router = APIRouter(tags=["merchants"])
 
-_DEFAULT_OPERATIONS = (
+_DEFAULT_OPERATIONS: tuple[AnalyticsOperation, ...] = (
     "get_success_rate",
     "get_failure_rate",
     "get_refund_rate",
@@ -74,16 +74,18 @@ def merchant_metrics(
     merchant_id = require_id(id, "id")
     _require_merchant(session, merchant_id)
     window = parse_window(start, end)
-    operations = operation or list(_DEFAULT_OPERATIONS)
-    for name in operations:
+    requested = operation or list(_DEFAULT_OPERATIONS)
+    selected: list[AnalyticsOperation] = []
+    for name in requested:
         if name not in ALLOWED_OPERATIONS:
             raise HTTPException(status_code=400, detail=f"unknown operation: {name}")
+        selected.append(cast(AnalyticsOperation, name))
     gateway = SqlToolGateway(session)
     metrics = [
         gateway.run(
             AnalyticsRequest(operation=name, window=window, merchant_id=merchant_id)
         )
-        for name in operations
+        for name in selected
     ]
     store.index_evidence([item.to_evidence() for item in metrics])
     return MerchantMetricsResponse(merchant_id=merchant_id, window=window, metrics=metrics)

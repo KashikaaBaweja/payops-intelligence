@@ -1,6 +1,6 @@
 # PayOps Intelligence
 
-Autonomous investigation agent for payment operations. This repository is at **Phase 9**: explainable merchant health score.
+Autonomous investigation agent for payment operations. This repository is at **Phase 10**: production-style investigation and merchant APIs.
 
 See [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).
 
@@ -14,8 +14,24 @@ See [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).
 - LangGraph orchestration: plan → investigate → aggregate → sufficiency → (retry or verify/write/critic)
 - Verifier checks claims against evidence (unsupported, contradictory, missing, weak) and can request another investigation pass
 - Critic reviews the draft report; the Writer cannot override verifier findings
-- Deterministic merchant health score (`GET /merchants/{merchant_id}/health`) with factors, penalties, and recommendations — no ML model
+- Deterministic merchant health score with factors, penalties, and recommendations — no ML model
+- Production-style HTTP API with Pydantic schemas, request IDs, structured logs, and OpenAPI docs
 - Safe execution traces (node, action, tool, query, evidence IDs, decision, verification) — no private chain-of-thought
+
+## API
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/health` | Process liveness |
+| `POST` | `/investigations` | Run an investigation |
+| `GET` | `/investigations/{id}` | Fetch the report |
+| `GET` | `/investigations/{id}/trace` | Fetch the execution trace |
+| `GET` | `/merchants/{id}/health` | Explainable health score |
+| `GET` | `/merchants/{id}/metrics` | Catalog payment metrics |
+| `GET` | `/evidence/{id}` | Resolve a cited evidence item |
+| `GET` | `/docs` | OpenAPI UI |
+
+Every response includes `X-Request-ID`. Errors return `{error, detail, status_code, request_id}`. Local demo mode does not require API keys.
 
 ## Quick start
 
