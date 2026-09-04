@@ -62,9 +62,9 @@ It behaves like a junior payments-ops analyst who can read docs, query metrics, 
 ```
 
 ### Layering principles
-- **API layer** never talks to the DB or vector store directly — it only invokes the orchestrator.
+- **API layer** invokes the orchestrator; it does not issue ad-hoc SQL or vector queries of its own.
 - **Orchestrator (LangGraph)** owns control flow and shared state; it does not itself "reason" about payments — it delegates to agents.
-- **Agents** are thin — each wraps an LLM call with a narrow responsibility and a restricted toolset.
+- **Agents** are deterministic Python components with a narrow responsibility and a restricted toolset. Demo mode does not call an LLM for control flow.
 - **Tools** are deterministic, typed, validated Python functions — the only path to data. Agents never get raw DB credentials or arbitrary SQL.
 
 ---
@@ -80,7 +80,7 @@ It behaves like a junior payments-ops analyst who can read docs, query metrics, 
 ### 3.2 Planner Agent
 - Input: raw user question.
 - Output: structured `InvestigationPlan` — list of `Task` objects, each with `task_type` (`retrieve_docs`, `query_metrics`, `inspect_webhooks`, `compare_merchants`, …), rationale, and required evidence category.
-- Uses an LLM call constrained by a strict output schema (Pydantic) — no free text allowed to leak into control flow.
+- Uses a keyword planner with a strict Pydantic `InvestigationPlan` — no free text is allowed to leak into control flow.
 
 ### 3.3 Researcher Agent (Standard + Agentic RAG)
 - Executes `retrieve_docs` tasks.
@@ -378,35 +378,35 @@ payops-intelligence/
 
 ## 16. Implementation Phases
 
+Delivered as Git history on `main`:
+
 | Phase | Deliverable |
 |---|---|
-| 0 | Repo scaffold, config, `.env.example`, CI skeleton, README stub |
-| 1 | Data model + synthetic data generator + seed script + planted incidents |
-| 2 | Doc corpus + RAG pipeline (parse→chunk→embed→retrieve), unit tests |
-| 3 | SQL Tool Gateway + operations + validation + unit tests |
-| 4 | LangGraph skeleton: state, Planner, Researcher, Data Analyst, linear happy path |
-| 5 | Sufficiency Agent + loop-back + iteration cap; agentic RAG behavior |
-| 6 | Webhook tool + Incident/Risk Agent |
-| 7 | Verifier + Critic + Writer + final report schema |
-| 8 | FastAPI endpoints + tracing surfaced via API |
-| 9 | Frontend MVP (input, trace timeline, report view) |
-| 10 | Merchant health score + explainability panel |
-| 11 | Evaluation harness + eval dataset + CI gate |
-| 12 | Docker/Compose + polish + ADRs + architecture docs finalized |
-
-Each phase will be delivered as its own response: what's being built, files touched, the implementation, tests run, technical debt notes, doc updates, exact commit message, and the recommended next phase — per your development method.
+| 1 | Repo scaffold, config, `.env.example`, CI skeleton |
+| 2 | PostgreSQL-compatible payment operations data model + Alembic |
+| 3 | Seedable synthetic dataset and planted incidents |
+| 4 | Document ingestion (parse → clean → chunk) |
+| 5 | Vector retrieval with source metadata |
+| 6 | Research agent |
+| 7 | Payment analytics SQL catalog |
+| 8 | Webhook investigation tools |
+| 9 | LangGraph investigation orchestrator |
+| 10 | Evidence verification and critic loop |
+| 11 | Explainable merchant health scoring |
+| 12 | Investigation HTTP APIs |
+| 13 | Investigation dashboard |
+| 14 | Agent evaluation benchmark |
+| 15 | Docker Compose, health checks, CI lint/type/test |
+| 16 | Architecture and agent-design documentation |
 
 ## 17. Testing Strategy
 - **Unit tests**: every tool (SQL gateway ops, webhook queries, chunker, embedder interface, merchant health scoring) tested in isolation with fixture data — no LLM calls.
-- **Integration tests**: graph run end-to-end against a seeded test DB + test vector store, asserting on state shape (not LLM wording) — e.g., "sufficiency loop triggered exactly once for incident X."
-- **Agent evaluation tests**: the eval harness (Section 10) run against labeled synthetic incidents, asserting groundedness/citation correctness thresholds; can run in CI with a small/cheap model to keep cost bounded.
+- **Integration tests**: graph run end-to-end against a seeded test DB + test vector store, asserting on state shape (not LLM wording).
+- **Agent evaluation tests**: the eval harness run against labeled synthetic incidents, asserting tool selection, grounding, citations, completion, and loop termination. No paid model is required.
 - **Contract tests** on Pydantic schemas at every agent boundary (planner output, evidence bundle, report) to catch schema drift early.
 
 ## 18. Demo Strategy
-- Seed 3 "headline" incidents (e.g., a payment-method-specific failure spike, a webhook delivery delay causing false failure reports, a genuinely ambiguous case with insufficient evidence) so the demo can show: (1) a clean successful investigation, (2) a loop-back-and-recover case, (3) an honest "I don't have enough evidence" case — the last one is often the most convincing thing to show an interviewer, since it demonstrates the system won't hallucinate a conclusion.
-- Dashboard walkthrough: submit question → watch agent timeline populate live → inspect evidence panel/citations → read final report → drill into merchant health explainability.
+- Seed 3 "headline" incidents (UPI `GATEWAY_TIMEOUT` on Harbor Retail M102, webhook delays on Cedar Digital Goods M201, sparse volume on Low-volume Labs M305) so the demo can show: (1) a clean successful investigation, (2) a loop-back-and-recover case, (3) an honest "I don't have enough evidence" case.
+- Dashboard walkthrough: submit question → inspect the trace pipeline → read evidence, metrics, health, and the final report.
 
----
-
-### Next step
-This is architecture only, per your instructions — no code yet. Confirm this design (or flag changes), and I'll start **Phase 0: repo scaffold + config + CI skeleton**.
+Local demo does not require LLM API keys.
