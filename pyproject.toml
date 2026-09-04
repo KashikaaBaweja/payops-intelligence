@@ -10,11 +10,13 @@ readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Kashikaa Baweja" }]
 dependencies = [
+  "alembic>=1.14.0",
   "fastapi>=0.115.0",
   "uvicorn[standard]>=0.32.0",
   "pydantic>=2.9.0",
   "pydantic-settings>=2.6.0",
   "python-dotenv>=1.0.1",
+  "sqlalchemy>=2.0.36",
 ]
 
 [project.optional-dependencies]
@@ -31,6 +33,7 @@ postgres = [
 
 [project.scripts]
 payops-api = "apps.api.main:run"
+payops-seed = "payops_core.data.seed:main"
 
 [tool.setuptools]
 packages = [

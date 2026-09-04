@@ -1,19 +1,18 @@
 # PayOps Intelligence
 
-Autonomous investigation agent for payment operations. This repository is at **Phase 1**: project foundation only.
+Autonomous investigation agent for payment operations. This repository is at **Phase 2**: synthetic payment-platform data model.
 
 See [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).
 
 ## Current scope
 
-- Python package layout
-- FastAPI process with `/health`
-- Shared Pydantic models
-- Environment-based configuration and logging
-- Docker / Compose skeletons
-- Frontend placeholder
+- Python package layout, FastAPI `/health`, config, logging, Docker
+- PostgreSQL-compatible SQLAlchemy models
+- Alembic migrations
+- Deterministic fictional seed data (no real customer information)
+- Shared Pydantic investigation contracts (unused until later phases)
 
-Agents, RAG, SQL tools, and synthetic data are intentionally not implemented yet.
+Agents and RAG are not implemented yet.
 
 ## Quick start
 
@@ -25,17 +24,15 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env
 pytest -q
+payops-seed
 PYTHONPATH=packages:. uvicorn apps.api.main:app --reload --port 8000
 ```
 
-`GET http://localhost:8000/health` should return `{"status":"ok",...}`.
-
-Frontend placeholder:
+Apply migrations against Postgres:
 
 ```bash
-cd apps/web
-npm install
-npm run dev
+alembic upgrade head
+payops-seed
 ```
 
 ## Docker
@@ -45,6 +42,4 @@ cd docker
 docker compose up --build
 ```
 
-## Next
-
-Phase 2 will add the data model, synthetic generator, and seed script. Do not add agents until that layer exists.
+Then run `alembic upgrade head` and `payops-seed` against the Compose database URL.
