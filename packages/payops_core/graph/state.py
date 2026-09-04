@@ -1,6 +1,9 @@
-from typing import TypedDict
+from __future__ import annotations
 
-from payops_core.models import (
+import operator
+from typing import Annotated, TypedDict
+
+from payops_core.models.schemas import (
     CritiqueResult,
     EvidenceBundle,
     Hypothesis,
@@ -8,6 +11,7 @@ from payops_core.models import (
     InvestigationPlan,
     MetricResult,
     SufficiencyVerdict,
+    Task,
     TimeWindow,
     TraceEvent,
     VerifiedClaim,
@@ -15,7 +19,7 @@ from payops_core.models import (
 
 
 class InvestigationState(TypedDict, total=False):
-    """Shared investigation state. Graph wiring is added in a later phase."""
+    """Shared graph state. Values are structured models, not free-text reasoning."""
 
     question: str
     merchant_id: str | None
@@ -28,8 +32,11 @@ class InvestigationState(TypedDict, total=False):
     verified_claims: list[VerifiedClaim]
     critique: CritiqueResult | None
     report: IncidentReport | None
-    trace: list[TraceEvent]
+    trace: Annotated[list[TraceEvent], operator.add]
     iteration: int
     max_iterations: int
     critic_revisions: int
-    pending_tasks: list[dict]
+    pending_tasks: list[Task]
+    completed_task_ids: Annotated[list[str], operator.add]
+    error: str | None
+    timed_out: bool

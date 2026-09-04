@@ -268,11 +268,15 @@ class EvidenceRef(BaseModel):
 
 
 class TraceEvent(BaseModel):
-    step: str
-    agent: str
+    """Safe execution trace. No private chain-of-thought or model scratchpads."""
+
+    node: str
+    action: str
     tool: str | None = None
-    input_summary: str
-    output_summary: str
+    search_query: str | None = None
+    evidence_ids: list[str] = Field(default_factory=list)
+    decision: str | None = None
+    verification_status: str | None = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 

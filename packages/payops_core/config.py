@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     embedding_dim: int = 128
     vector_backend: str = "memory"
     corpus_dir: str = "docs/corpus"
+    max_iterations: int = 3
+    graph_timeout_seconds: float = 30.0
 
     @property
     def cors_origin_list(self) -> list[str]:
