@@ -34,7 +34,7 @@ from apps.api.store import InvestigationStore
 logger = getLogger(__name__)
 
 _TAGS = [
-    {"name": "health", "description": "Process liveness"},
+    {"name": "health", "description": "Liveness and readiness"},
     {"name": "investigations", "description": "Run and inspect investigations"},
     {"name": "merchants", "description": "Health scores and catalog metrics"},
     {"name": "evidence", "description": "Resolve cited evidence items"},
@@ -80,8 +80,8 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     application.add_middleware(RequestIdMiddleware)
-    application.add_exception_handler(StarletteHTTPException, http_exception_handler)
-    application.add_exception_handler(RequestValidationError, validation_exception_handler)
+    application.add_exception_handler(StarletteHTTPException, http_exception_handler)  # type: ignore[arg-type]
+    application.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
     application.add_exception_handler(Exception, unhandled_exception_handler)
     application.include_router(health_router)
     application.include_router(investigations_router)

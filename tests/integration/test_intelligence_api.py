@@ -41,6 +41,7 @@ def test_openapi_documents_required_paths(api_client) -> None:
         "/merchants/{id}/metrics",
         "/evidence/{id}",
         "/health",
+        "/health/ready",
     ):
         assert path in paths
     post = paths["/investigations"]["post"]

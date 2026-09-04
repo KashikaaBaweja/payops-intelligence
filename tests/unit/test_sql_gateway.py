@@ -52,9 +52,7 @@ def test_time_window_and_merchant_comparison() -> None:
     windows = gateway.run(
         _request(operation="compare_time_windows", previous_window=PREVIOUS_WINDOW)
     )
-    merchants = gateway.run(
-        _request(operation="compare_merchants", compare_merchant_id="M201")
-    )
+    merchants = gateway.run(_request(operation="compare_merchants", compare_merchant_id="M201"))
     assert windows.value["current"] == 0.833333
     assert windows.value["previous"] == 1.0
     assert windows.value["delta"] == -0.166667

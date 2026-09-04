@@ -33,9 +33,7 @@ class IncidentRiskAgent:
                 Hypothesis(
                     cause="Webhook delivery delays after successful capture",
                     supporting_evidence_ids=[
-                        item.evidence_id
-                        for item in evidence.items
-                        if item.source == "webhook"
+                        item.evidence_id for item in evidence.items if item.source == "webhook"
                     ][:5],
                     confidence=0.8,
                     category="webhooks",
@@ -55,9 +53,7 @@ class IncidentRiskAgent:
             if item.supporting_evidence_ids or not ids:
                 filled.append(item)
             else:
-                filled.append(
-                    item.model_copy(update={"supporting_evidence_ids": ids[:3]})
-                )
+                filled.append(item.model_copy(update={"supporting_evidence_ids": ids[:3]}))
         return filled
 
 

@@ -26,8 +26,11 @@ chroma_db/
 node_modules/
 apps/web/.next/
 apps/web/out/
-apps/web/.turbo/
-npm-debug.log*
+apps/web/tsconfig.tsbuildinfo
+
+# Generated evaluation reports
+eval/last_report.md
+eval/last_report.json
 
 # OS / IDE
 .DS_Store

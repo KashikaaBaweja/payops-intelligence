@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  test:
+  python:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,5 +17,55 @@ jobs:
         run: pip install -e ".[dev]"
       - name: Lint
         run: ruff check packages apps tests
+      - name: Format
+        run: ruff format --check packages apps tests
+      - name: Typecheck
+        run: mypy
       - name: Test
         run: pytest -q
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose up
+        run: docker compose -f docker/docker-compose.yml up --build -d
+      - name: Wait for API readiness
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8000/health/ready >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f docker/docker-compose.yml logs
+          exit 1
+      - name: Smoke
+        run: |
+          curl -fsS http://127.0.0.1:8000/health
+          curl -fsS http://127.0.0.1:8000/health/ready
+          curl -fsS http://127.0.0.1:3001/health
+          curl -fsS -X POST http://127.0.0.1:8000/investigations \
+            -H 'Content-Type: application/json' \
+            -d '{"question":"What does GATEWAY_TIMEOUT mean?","max_iterations":2}' \
+            | python3 -c "import json,sys; body=json.load(sys.stdin); assert body['status']=='completed', body"
+      - name: Compose down
+        if: always()
+        run: docker compose -f docker/docker-compose.yml down -v

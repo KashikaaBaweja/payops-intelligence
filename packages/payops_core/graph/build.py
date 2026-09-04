@@ -113,9 +113,7 @@ def run_investigation(
         started_at=time.monotonic(),
     )
     graph = build_investigation_graph(runtime)
-    result = graph.invoke(
-        initial_state(question, max_iterations or settings.max_iterations)
-    )
+    result = graph.invoke(initial_state(question, max_iterations or settings.max_iterations))
     return result  # type: ignore[return-value]
 
 

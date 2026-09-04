@@ -85,11 +85,7 @@ class VerifierAgent:
             self._check(hypothesis, evidence, index == 0)
             for index, hypothesis in enumerate(hypotheses)
         ]
-        gaps = [
-            _gap_for(claim)
-            for claim in claims
-            if claim.critical and not claim.supported
-        ]
+        gaps = [_gap_for(claim) for claim in claims if claim.critical and not claim.supported]
         return VerificationResult(
             claims=claims,
             needs_more_evidence=bool(gaps),

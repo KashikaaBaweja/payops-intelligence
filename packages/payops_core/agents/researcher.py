@@ -134,9 +134,7 @@ class ResearcherAgent:
             if not cleaned or key in seen:
                 return
             seen.add(key)
-            queries.append(
-                SearchQuery(query=cleaned, doc_type=doc_type, rationale=rationale)
-            )
+            queries.append(SearchQuery(query=cleaned, doc_type=doc_type, rationale=rationale))
 
         if task is not None and task.query:
             add(task.query, None, "planner-provided retrieve_docs query")
@@ -159,9 +157,7 @@ class ResearcherAgent:
             return False
         focus = _tokens(question) | _tokens(query.query)
         blob = " ".join(
-            part
-            for part in (hit.text, hit.section, hit.document_id, hit.source)
-            if part
+            part for part in (hit.text, hit.section, hit.document_id, hit.source) if part
         )
         return bool(focus & _tokens(blob))
 

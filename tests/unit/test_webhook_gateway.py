@@ -33,9 +33,7 @@ def test_gateway_classifies_known_webhook_cases() -> None:
     retries = gateway.run(_request("find_retries"))
     duplicates = gateway.run(_request("find_duplicate_events"))
     correlated = gateway.run(_request("correlate_events_and_payments"))
-    events = gateway.run(
-        WebhookRequest(operation="get_events_for_payment", payment_id="PWH001")
-    )
+    events = gateway.run(WebhookRequest(operation="get_events_for_payment", payment_id="PWH001"))
     assert [item.payment_id for item in delayed.findings] == ["PWH002"]
     assert [item.payment_id for item in failed.findings] == ["PWH003", "PWH005"]
     assert [item.payment_id for item in missing.findings] == ["PWH004"]

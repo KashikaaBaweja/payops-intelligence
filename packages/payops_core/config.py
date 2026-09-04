@@ -17,7 +17,9 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/local/payops.db"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = (
+        "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001"
+    )
     json_logs: bool = True
     llm_provider: str = "demo"
     llm_model: str = "gpt-4o-mini"
@@ -26,6 +28,9 @@ class Settings(BaseSettings):
     corpus_dir: str = "docs/corpus"
     max_iterations: int = 3
     graph_timeout_seconds: float = 30.0
+    auto_migrate: bool = False
+    seed_on_start: bool = False
+    db_wait_seconds: float = 60.0
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -45,9 +45,7 @@ class CriticAgent:
         ) and bool(report.executive_summary)
         instructions = None
         if not approved:
-            instructions = (
-                "Revise using verifier findings only. Do not promote unsupported claims."
-            )
+            instructions = "Revise using verifier findings only. Do not promote unsupported claims."
         return CritiqueResult(
             approved=approved,
             issues=issues,
@@ -82,9 +80,7 @@ def _completeness(question: str, report: IncidentReport) -> list[str]:
 def _coverage(report: IncidentReport) -> list[str]:
     cited = {item.evidence_id for item in report.evidence}
     missing = [
-        item_id
-        for item_id in report.likely_cause.supporting_evidence_ids
-        if item_id not in cited
+        item_id for item_id in report.likely_cause.supporting_evidence_ids if item_id not in cited
     ]
     if missing:
         return ["evidence_coverage: likely cause cites IDs absent from the report"]
@@ -102,9 +98,10 @@ def _unsupported(claims: list[VerifiedClaim], report: IncidentReport) -> list[st
         and report.likely_cause.cause != _FALLBACK_CAUSE
     ):
         return ["unsupported_claims: writer treated a rejected claim as established"]
-    if any(
-        claim.critical and not claim.supported for claim in claims
-    ) and report.evidence_sufficient:
+    if (
+        any(claim.critical and not claim.supported for claim in claims)
+        and report.evidence_sufficient
+    ):
         return ["unsupported_claims: evidence_sufficient ignores verifier"]
     return []
 

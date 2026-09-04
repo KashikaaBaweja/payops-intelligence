@@ -45,16 +45,12 @@ def investigate_node(state: InvestigationState, runtime: GraphRuntime) -> dict:
             "iteration": iteration,
             "timed_out": True,
             "pending_tasks": [],
-            "trace": [
-                safe_trace(node="investigate", action="timeout", decision="timeout")
-            ],
+            "trace": [safe_trace(node="investigate", action="timeout", decision="timeout")],
         }
     if not pending:
         return {
             "iteration": iteration,
-            "trace": [
-                safe_trace(node="investigate", action="skip", decision="no_pending_tasks")
-            ],
+            "trace": [safe_trace(node="investigate", action="skip", decision="no_pending_tasks")],
         }
     task = pending[0]
     remaining = pending[1:]
@@ -275,11 +271,7 @@ def route_after_verifier(state: InvestigationState) -> str:
     verification = state.get("verification")
     iteration = int(state.get("iteration") or 0)
     maximum = int(state.get("max_iterations") or 1)
-    if (
-        verification is not None
-        and verification.needs_more_evidence
-        and iteration < maximum
-    ):
+    if verification is not None and verification.needs_more_evidence and iteration < maximum:
         return "refine"
     return "writer"
 

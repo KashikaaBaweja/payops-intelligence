@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from logging import getLogger
 from time import perf_counter
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from payops_core.data.models import Merchant
@@ -25,7 +26,7 @@ logger = getLogger(__name__)
 
 router = APIRouter(tags=["investigations"])
 
-_ERROR_RESPONSES = {
+_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"model": ErrorResponse, "description": "Invalid request"},
     404: {"model": ErrorResponse, "description": "Investigation not found"},
     422: {"model": ErrorResponse, "description": "Validation error"},

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated, cast
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from payops_core.data.models import Merchant
@@ -22,7 +22,7 @@ _DEFAULT_OPERATIONS: tuple[AnalyticsOperation, ...] = (
     "get_dispute_rate",
     "get_webhook_failure_rate",
 )
-_ERROR_RESPONSES = {
+_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"model": ErrorResponse, "description": "Invalid merchant or window"},
     404: {"model": ErrorResponse, "description": "Merchant not found"},
     422: {"model": ErrorResponse, "description": "Validation error"},
@@ -82,9 +82,7 @@ def merchant_metrics(
         selected.append(cast(AnalyticsOperation, name))
     gateway = SqlToolGateway(session)
     metrics = [
-        gateway.run(
-            AnalyticsRequest(operation=name, window=window, merchant_id=merchant_id)
-        )
+        gateway.run(AnalyticsRequest(operation=name, window=window, merchant_id=merchant_id))
         for name in selected
     ]
     store.index_evidence([item.to_evidence() for item in metrics])

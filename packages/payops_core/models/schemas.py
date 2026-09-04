@@ -358,3 +358,10 @@ class HealthResponse(BaseModel):
     status: Literal["ok"]
     environment: str
     version: str
+
+
+class ReadyResponse(BaseModel):
+    status: Literal["ok"]
+    environment: str
+    version: str
+    database: Literal["up"]

@@ -98,6 +98,16 @@ def test_webhook_required_question(graph_deps) -> None:
     assert report.evidence_sufficient is True
 
 
+def test_merchant_health_scorecard(graph_deps) -> None:
+    state = _run(graph_deps, "Merchant health scorecard for Harbor Retail M102")
+    report = report_from(state)
+    _assert_safe_trace(state)
+    assert [task.task_type for task in state["plan"].tasks] == ["merchant_health"]
+    assert any(item.source == "health" for item in state["evidence"].items)
+    assert report.evidence_sufficient is True
+    assert "Incomplete investigation" not in report.executive_summary
+
+
 def test_insufficient_evidence_retry(graph_deps) -> None:
     state = _run(
         graph_deps,
@@ -140,10 +150,7 @@ def test_unsupported_conclusion_requests_more_investigation(graph_deps, monkeypa
     assert "verifier" in nodes
     assert "refine" in nodes
     assert nodes.index("verifier") < nodes.index("refine")
-    assert any(
-        event.node == "refine" and event.action == "queue_gaps"
-        for event in state["trace"]
-    )
+    assert any(event.node == "refine" and event.action == "queue_gaps" for event in state["trace"])
     assert state.get("verification") is not None
     assert state["verification"].needs_more_evidence is True
     assert report.evidence_sufficient is False

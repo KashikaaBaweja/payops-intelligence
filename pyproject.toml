@@ -27,6 +27,7 @@ dev = [
   "pytest>=8.3.0",
   "pytest-asyncio>=0.24.0",
   "ruff>=0.7.0",
+  "mypy>=1.13.0",
 ]
 postgres = [
   "psycopg[binary]>=3.2.0",
@@ -37,6 +38,7 @@ postgres = [
 payops-api = "apps.api.main:run"
 payops-seed = "apps.seed:main"
 payops-ingest = "apps.ingest:main"
+payops-eval = "apps.eval:main"
 
 [tool.setuptools]
 packages = [
@@ -46,6 +48,7 @@ packages = [
   "payops_core.graph",
   "payops_core.models",
   "payops_core.rag",
+  "payops_core.eval",
   "payops_core.tools",
   "apps",
   "apps.api",
@@ -70,6 +73,32 @@ select = ["E", "F", "I"]
 
 [tool.ruff.lint.per-file-ignores]
 "apps/api/main.py" = ["E402"]
+"apps/eval.py" = ["E402"]
 "apps/ingest.py" = ["E402"]
 "apps/seed.py" = ["E402"]
 "alembic/env.py" = ["E402"]
+"packages/payops_core/eval/dataset.py" = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "packages:."
+files = ["packages/payops_core", "apps"]
+explicit_package_bases = true
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = [
+  "payops_core.agents.*",
+  "payops_core.graph.*",
+  "payops_core.tools.*",
+  "payops_core.data.synthetic_generator",
+  "payops_core.eval.*",
+]
+ignore_errors = true

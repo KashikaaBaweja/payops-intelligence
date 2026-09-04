@@ -189,18 +189,24 @@ class SqlToolGateway:
 
     def _webhook_failure_rate(self, request: AnalyticsRequest) -> MetricResult:
         predicates = self._payment_predicates(request, request.window, request.merchant_id)
-        total = self.session.scalar(
-            select(func.count())
-            .select_from(WebhookEvent)
-            .join(Payment, Payment.payment_id == WebhookEvent.payment_id)
-            .where(*predicates)
-        ) or 0
-        failed = self.session.scalar(
-            select(func.count())
-            .select_from(WebhookEvent)
-            .join(Payment, Payment.payment_id == WebhookEvent.payment_id)
-            .where(*predicates, WebhookEvent.delivery_status == "failed")
-        ) or 0
+        total = (
+            self.session.scalar(
+                select(func.count())
+                .select_from(WebhookEvent)
+                .join(Payment, Payment.payment_id == WebhookEvent.payment_id)
+                .where(*predicates)
+            )
+            or 0
+        )
+        failed = (
+            self.session.scalar(
+                select(func.count())
+                .select_from(WebhookEvent)
+                .join(Payment, Payment.payment_id == WebhookEvent.payment_id)
+                .where(*predicates, WebhookEvent.delivery_status == "failed")
+            )
+            or 0
+        )
         return self._rate_result(
             request,
             metric="webhook_failure_rate",
@@ -227,19 +233,25 @@ class SqlToolGateway:
         merchant_id: str | None,
     ) -> dict[str, int]:
         predicates = self._payment_predicates(request, window, merchant_id)
-        total = self.session.scalar(
-            select(func.count()).select_from(Payment).where(*predicates)
-        ) or 0
-        succeeded = self.session.scalar(
-            select(func.count())
-            .select_from(Payment)
-            .where(*predicates, Payment.status == "succeeded")
-        ) or 0
-        failed = self.session.scalar(
-            select(func.count())
-            .select_from(Payment)
-            .where(*predicates, Payment.status == "failed")
-        ) or 0
+        total = (
+            self.session.scalar(select(func.count()).select_from(Payment).where(*predicates)) or 0
+        )
+        succeeded = (
+            self.session.scalar(
+                select(func.count())
+                .select_from(Payment)
+                .where(*predicates, Payment.status == "succeeded")
+            )
+            or 0
+        )
+        failed = (
+            self.session.scalar(
+                select(func.count())
+                .select_from(Payment)
+                .where(*predicates, Payment.status == "failed")
+            )
+            or 0
+        )
         return {"total": int(total), "succeeded": int(succeeded), "failed": int(failed)}
 
     def _related_count(self, model: type[Refund] | type[Dispute], request: AnalyticsRequest) -> int:

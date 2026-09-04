@@ -1,0 +1,28 @@
+FROM node:22-alpine AS deps
+WORKDIR /web
+COPY apps/web/package.json apps/web/package-lock.json ./
+RUN npm ci
+
+FROM node:22-alpine AS build
+WORKDIR /web
+COPY --from=deps /web/node_modules ./node_modules
+COPY apps/web ./
+ARG PAYOPS_API_PROXY=http://api:8000
+ENV PAYOPS_API_PROXY=$PAYOPS_API_PROXY \
+    NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+FROM node:22-alpine AS runner
+WORKDIR /web
+ENV NODE_ENV=production \
+    PAYOPS_API_PROXY=http://api:8000 \
+    PORT=3001 \
+    HOSTNAME=0.0.0.0 \
+    NEXT_TELEMETRY_DISABLED=1
+COPY --from=build /web/.next/standalone ./
+COPY --from=build /web/.next/static ./.next/static
+USER node
+EXPOSE 3001
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
+    CMD node -e "fetch('http://127.0.0.1:3001/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "server.js"]

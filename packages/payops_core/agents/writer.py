@@ -129,9 +129,7 @@ def _verifier_notes(claims: list[VerifiedClaim]) -> list[str]:
     notes: list[str] = []
     for claim in claims:
         if claim.issues:
-            notes.append(
-                f"Verifier: {claim.claim} [{', '.join(claim.issues)}]"
-            )
+            notes.append(f"Verifier: {claim.claim} [{', '.join(claim.issues)}]")
     return notes
 
 

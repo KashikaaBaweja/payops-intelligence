@@ -16,9 +16,7 @@ def _agent() -> ResearcherAgent:
 
 
 def test_relevant_retrieval() -> None:
-    result = _agent().research(
-        "What does GATEWAY_TIMEOUT mean for Harbor Retail UPI payments?"
-    )
+    result = _agent().research("What does GATEWAY_TIMEOUT mean for Harbor Retail UPI payments?")
     assert result.queries
     assert result.evidence.items
     combined = " ".join(item.text_snippet for item in result.evidence.items)
@@ -38,9 +36,7 @@ def test_irrelevant_retrieval_is_rejected() -> None:
         metadata={"doc_id": "payment-failures"},
     )
     agent = ResearcherAgent(_FixedRetriever(hit))
-    result = agent.research(
-        "How do kubernetes xenon quark diplodocus certificates rotate?"
-    )
+    result = agent.research("How do kubernetes xenon quark diplodocus certificates rotate?")
     assert result.evidence.items == []
     assert result.rejected_count >= 1
 
