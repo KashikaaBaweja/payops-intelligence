@@ -1,0 +1,19 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY pyproject.toml README.md ./
+COPY packages ./packages
+COPY apps ./apps
+COPY docs ./docs
+COPY eval ./eval
+
+RUN pip install --no-cache-dir .
+
+ENV PAYOPS_DATABASE_URL=sqlite:////data/payops.db
+ENV PAYOPS_VECTOR_DIR=/data/chroma
+ENV PAYOPS_LLM_PROVIDER=demo
+
+EXPOSE 8000
+
+CMD ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
