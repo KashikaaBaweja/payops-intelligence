@@ -6,11 +6,3 @@ body {
   background: #0b1220;
   color: #e8eefc;
 }
-
-* {
-  box-sizing: border-box;
-}
-
-a {
-  color: inherit;
-}

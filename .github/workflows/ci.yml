@@ -19,6 +19,3 @@ jobs:
         run: ruff check packages apps tests
       - name: Test
         run: pytest -q
-        env:
-          PAYOPS_LLM_PROVIDER: demo
-          PAYOPS_DATABASE_URL: sqlite:///:memory:

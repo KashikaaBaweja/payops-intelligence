@@ -1,5 +1,0 @@
-{"id": "q1", "question": "Why did Merchant M102 success rate drop 10:00-12:00 on 15 Jun 2024?", "merchant_id": "M102", "start": "2024-06-15T10:00:00", "end": "2024-06-15T12:00:00", "expect": {"task_types": ["retrieve_docs", "query_metrics"], "sufficient": true, "cause_contains": "timeout"}}
-{"id": "q2", "question": "Merchant M201 reports failed payments 14:00-16:00 on 18 Jun 2024. Did payments fail?", "merchant_id": "M201", "start": "2024-06-18T14:00:00", "end": "2024-06-18T16:00:00", "expect": {"task_types": ["inspect_webhooks"], "sufficient": true, "cause_contains": "webhook"}}
-{"id": "q3", "question": "Something is wrong with M305. Find the root cause.", "merchant_id": "M305", "start": "2024-05-01T00:00:00", "end": "2024-05-02T00:00:00", "expect": {"sufficient": false}}
-{"id": "q4", "question": "What does GATEWAY_TIMEOUT mean for UPI?", "merchant_id": null, "expect": {"task_types": ["retrieve_docs"], "sufficient": true}}
-{"id": "q5", "question": "Compare M102 UPI failures to the previous window.", "merchant_id": "M102", "start": "2024-06-15T10:00:00", "end": "2024-06-15T12:00:00", "expect": {"task_types": ["query_metrics"]}}

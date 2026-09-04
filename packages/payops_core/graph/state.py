@@ -15,6 +15,8 @@ from payops_core.models import (
 
 
 class InvestigationState(TypedDict, total=False):
+    """Shared investigation state. Graph wiring is added in a later phase."""
+
     question: str
     merchant_id: str | None
     time_window: TimeWindow | None

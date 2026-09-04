@@ -1,1 +1,1 @@
-# Investigation HTTP routes
+"""HTTP routers."""

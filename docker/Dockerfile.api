@@ -5,14 +5,13 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY packages ./packages
 COPY apps ./apps
-COPY docs ./docs
-COPY eval ./eval
 
 RUN pip install --no-cache-dir .
 
-ENV PAYOPS_DATABASE_URL=sqlite:////data/payops.db
-ENV PAYOPS_VECTOR_DIR=/data/chroma
-ENV PAYOPS_LLM_PROVIDER=demo
+ENV PAYOPS_ENVIRONMENT=production
+ENV PAYOPS_LOG_LEVEL=INFO
+ENV PAYOPS_API_HOST=0.0.0.0
+ENV PAYOPS_API_PORT=8000
 
 EXPOSE 8000
 

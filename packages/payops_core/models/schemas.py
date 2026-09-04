@@ -123,3 +123,9 @@ class IncidentReport(BaseModel):
     sources: list[EvidenceRef] = Field(default_factory=list)
     agent_execution_summary: list[TraceEvent] = Field(default_factory=list)
     evidence_sufficient: bool
+
+
+class HealthResponse(BaseModel):
+    status: Literal["ok"]
+    environment: str
+    version: str

@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: payops
-      POSTGRES_PASSWORD: payops
-      POSTGRES_DB: payops
+      POSTGRES_USER: ${POSTGRES_USER:-payops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-payops}
+      POSTGRES_DB: ${POSTGRES_DB:-payops}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U payops"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-payops}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -20,19 +20,17 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.api
     environment:
-      PAYOPS_DATABASE_URL: postgresql+psycopg://payops:payops@postgres:5432/payops
-      PAYOPS_LLM_PROVIDER: ${PAYOPS_LLM_PROVIDER:-demo}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      PAYOPS_MAX_ITERATIONS: "3"
-      PAYOPS_CORS_ORIGINS: http://localhost:3000
+      PAYOPS_ENVIRONMENT: ${PAYOPS_ENVIRONMENT:-local}
+      PAYOPS_LOG_LEVEL: ${PAYOPS_LOG_LEVEL:-INFO}
+      PAYOPS_DATABASE_URL: ${PAYOPS_DATABASE_URL:-postgresql+psycopg://payops:payops@postgres:5432/payops}
+      PAYOPS_API_HOST: 0.0.0.0
+      PAYOPS_API_PORT: 8000
+      PAYOPS_CORS_ORIGINS: ${PAYOPS_CORS_ORIGINS:-http://localhost:3000}
     ports:
       - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - payops-data:/data
 
 volumes:
   pgdata:
-  payops-data:
