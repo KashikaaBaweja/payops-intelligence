@@ -13,7 +13,7 @@ _SOURCE_FOR_TASK = {
     "query_metrics": "metric",
     "inspect_webhooks": "webhook",
     "compare_merchants": "metric",
-    "merchant_health": "metric",
+    "merchant_health": "health",
 }
 
 
