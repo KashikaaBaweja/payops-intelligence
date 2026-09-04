@@ -1,18 +1,18 @@
 # PayOps Intelligence
 
-Autonomous investigation agent for payment operations. This repository is at **Phase 2**: synthetic payment-platform data model.
+Autonomous investigation agent for payment operations. This repository is at **Phase 3**: document ingestion and RAG foundation.
 
 See [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).
 
 ## Current scope
 
 - Python package layout, FastAPI `/health`, config, logging, Docker
-- PostgreSQL-compatible SQLAlchemy models
-- Alembic migrations
+- PostgreSQL-compatible SQLAlchemy models and Alembic migrations
 - Deterministic fictional seed data (no real customer information)
+- Document ingestion (PDF, Markdown, TXT, JSON), chunking, embeddings, and retrieval
 - Shared Pydantic investigation contracts (unused until later phases)
 
-Agents and RAG are not implemented yet.
+Agents are not implemented yet.
 
 ## Quick start
 
@@ -25,15 +25,19 @@ pip install -e ".[dev]"
 cp .env.example .env
 pytest -q
 payops-seed
+payops-ingest
 PYTHONPATH=packages:. uvicorn apps.api.main:app --reload --port 8000
 ```
 
-Apply migrations against Postgres:
+Apply migrations against Postgres, then persist chunks with pgvector:
 
 ```bash
 alembic upgrade head
 payops-seed
+PAYOPS_VECTOR_BACKEND=pgvector payops-ingest
 ```
+
+Synthetic ops docs live in `docs/corpus/`. Every chunk keeps `document_id`, source path, section, and original front matter.
 
 ## Docker
 

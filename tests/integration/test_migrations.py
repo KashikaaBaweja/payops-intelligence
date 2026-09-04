@@ -24,5 +24,6 @@ def test_alembic_upgrade_creates_payment_tables(tmp_path, monkeypatch) -> None:
         "webhook_events",
         "payment_methods",
         "error_codes",
+        "document_chunks",
     }.issubset(tables)
     get_settings.cache_clear()

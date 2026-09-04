@@ -16,6 +16,7 @@ dependencies = [
   "pydantic>=2.9.0",
   "pydantic-settings>=2.6.0",
   "python-dotenv>=1.0.1",
+  "pypdf>=5.1.0",
   "sqlalchemy>=2.0.36",
 ]
 
@@ -33,7 +34,8 @@ postgres = [
 
 [project.scripts]
 payops-api = "apps.api.main:run"
-payops-seed = "payops_core.data.seed:main"
+payops-seed = "apps.seed:main"
+payops-ingest = "apps.ingest:main"
 
 [tool.setuptools]
 packages = [
@@ -67,3 +69,6 @@ select = ["E", "F", "I"]
 
 [tool.ruff.lint.per-file-ignores]
 "apps/api/main.py" = ["E402"]
+"apps/ingest.py" = ["E402"]
+"apps/seed.py" = ["E402"]
+"alembic/env.py" = ["E402"]

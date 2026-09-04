@@ -32,6 +32,28 @@ class InvestigationPlan(BaseModel):
     tasks: list[Task]
 
 
+class RetrievalHit(BaseModel):
+    document_id: str
+    chunk_id: str
+    source: str
+    section: str
+    text: str
+    score: float
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    def to_evidence(self) -> "EvidenceItem":
+        return EvidenceItem(
+            evidence_id=f"doc-{self.chunk_id}",
+            source="doc",
+            doc_id=self.document_id,
+            section=self.section,
+            chunk_id=self.chunk_id,
+            score=self.score,
+            text_snippet=self.text[:500],
+            metadata=self.metadata,
+        )
+
+
 class EvidenceItem(BaseModel):
     evidence_id: str
     source: Literal["doc", "metric", "webhook", "health"]

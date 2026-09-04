@@ -1,0 +1,33 @@
+{
+  "doc_id": "error-codes",
+  "doc_type": "error_codes",
+  "product_area": "payments",
+  "title": "Failure code reference",
+  "version": "2024-06",
+  "sections": [
+    {
+      "heading": "Error code catalog",
+      "text": "Use these error codes when classifying payment failures during ops investigations."
+    },
+    {
+      "heading": "GATEWAY_TIMEOUT",
+      "text": "The method processor did not respond. Typical during UPI or card-network brownouts. Ops action: fail over and page the processor."
+    },
+    {
+      "heading": "INSUFFICIENT_FUNDS",
+      "text": "Issuer decline. Not an incident unless it spikes across many issuers."
+    },
+    {
+      "heading": "DO_NOT_HONOR",
+      "text": "Generic issuer decline. Investigate only if concentrated on one acquirer."
+    },
+    {
+      "heading": "AUTHENTICATION_FAILED",
+      "text": "Customer 3DS or UPI PIN failure. Not a platform outage."
+    },
+    {
+      "heading": "WEBHOOK_TIMEOUT",
+      "text": "Consumer did not ACK. The payment may still have succeeded."
+    }
+  ]
+}

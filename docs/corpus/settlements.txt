@@ -1,0 +1,7 @@
+Settlements batch succeeded payments per merchant.
+
+Settlement delay does not change payment success rate.
+
+If a merchant asks why they were not paid, inspect settlements and captured payments separately from authorization failures.
+
+Statuses: pending, settled, failed.

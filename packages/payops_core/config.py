@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     llm_provider: str = "demo"
     llm_model: str = "gpt-4o-mini"
+    embedding_dim: int = 128
+    vector_backend: str = "memory"
+    corpus_dir: str = "docs/corpus"
 
     @property
     def cors_origin_list(self) -> list[str]:
