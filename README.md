@@ -1,6 +1,6 @@
 # PayOps Intelligence
 
-Autonomous investigation agent for payment operations. This repository is at **Phase 8**: evidence verification and self-correction.
+Autonomous investigation agent for payment operations. This repository is at **Phase 9**: explainable merchant health score.
 
 See [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).
 
@@ -14,6 +14,7 @@ See [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).
 - LangGraph orchestration: plan → investigate → aggregate → sufficiency → (retry or verify/write/critic)
 - Verifier checks claims against evidence (unsupported, contradictory, missing, weak) and can request another investigation pass
 - Critic reviews the draft report; the Writer cannot override verifier findings
+- Deterministic merchant health score (`GET /merchants/{merchant_id}/health`) with factors, penalties, and recommendations — no ML model
 - Safe execution traces (node, action, tool, query, evidence IDs, decision, verification) — no private chain-of-thought
 
 ## Quick start

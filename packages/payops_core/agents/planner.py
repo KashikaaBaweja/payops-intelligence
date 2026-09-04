@@ -37,6 +37,7 @@ _METRIC_HINTS = frozenset(
         "volume",
     }
 )
+_HEALTH_HINTS = frozenset({"health", "healthy", "scorecard"})
 _WEBHOOK_HINTS = frozenset(
     {"webhook", "webhooks", "ack", "delayed", "duplicate", "retry", "retries"}
 )
@@ -54,6 +55,17 @@ class PlannerAgent:
         method_id = "upi" if "upi" in tokens else None
         window = _window_for(tokens)
         tasks: list[Task] = []
+        if tokens & _HEALTH_HINTS and merchant_id:
+            tasks.append(
+                Task(
+                    task_id="health-1",
+                    task_type="merchant_health",
+                    rationale="Question asks for an explainable merchant health score.",
+                    query=question,
+                    merchant_id=merchant_id,
+                    evidence_category="health",
+                )
+            )
         if tokens & _WEBHOOK_HINTS:
             tasks.append(
                 Task(

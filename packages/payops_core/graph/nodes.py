@@ -13,6 +13,7 @@ from payops_core.graph.runtime import GraphRuntime
 from payops_core.graph.state import InvestigationState
 from payops_core.graph.trace import safe_trace
 from payops_core.models.schemas import EvidenceBundle, EvidenceItem, MetricResult, Task
+from payops_core.tools.merchant_health import score_merchant
 
 
 def planner_node(state: InvestigationState) -> dict:
@@ -303,7 +304,12 @@ def _run_task(
         result = ResearcherAgent(runtime.retriever).research(task.query or question, task=task)
         query = result.queries[0].query if result.queries else task.query
         return result.evidence.items, [], "search_docs", query
-    if task.task_type in {"query_metrics", "compare_merchants", "merchant_health"}:
+    if task.task_type == "merchant_health":
+        if not merchant_id:
+            raise ValueError("merchant_health requires a merchant_id")
+        scored = score_merchant(runtime.session, merchant_id, window)
+        return [scored.to_evidence()], [], "merchant_health", task.query
+    if task.task_type in {"query_metrics", "compare_merchants"}:
         result = DataAnalystAgent(runtime.session).analyze(
             task.query or question,
             window=window,

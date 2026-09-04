@@ -309,6 +309,51 @@ class IncidentReport(BaseModel):
     evidence_sufficient: bool
 
 
+class HealthFactor(BaseModel):
+    name: str
+    weight: float
+    value: float
+    score: float
+    band: Literal["healthy", "degraded", "critical"]
+    explanation: str
+
+
+class HealthPenalty(BaseModel):
+    factor: str
+    points: float
+    reason: str
+
+
+class MerchantHealthScore(BaseModel):
+    """Deterministic merchant health. Every point is attributable to a named factor."""
+
+    merchant_id: str
+    window: TimeWindow | None = None
+    score: float = Field(ge=0, le=100)
+    band: Literal["healthy", "degraded", "critical"]
+    factors: list[HealthFactor]
+    factor_values: dict[str, float]
+    penalties: list[HealthPenalty] = Field(default_factory=list)
+    positive_signals: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+
+    def to_evidence(self) -> EvidenceItem:
+        return EvidenceItem(
+            evidence_id=f"health-{self.merchant_id}",
+            source="health",
+            text_snippet=(
+                f"health_score={self.score} band={self.band} "
+                f"success_rate={self.factor_values.get('success_rate')}"
+            ),
+            metadata={
+                "score": self.score,
+                "band": self.band,
+                "factor_values": self.factor_values,
+                "penalties": [item.model_dump() for item in self.penalties],
+            },
+        )
+
+
 class HealthResponse(BaseModel):
     status: Literal["ok"]
     environment: str
