@@ -19,6 +19,10 @@ from payops_core.models.schemas import (
     TimeWindow,
     TraceEvent,
     VerifiedClaim,
+    WebhookFinding,
+    WebhookInspectorResult,
+    WebhookRequest,
+    WebhookToolResult,
 )
 
 __all__ = [
@@ -42,4 +46,8 @@ __all__ = [
     "TimeWindow",
     "TraceEvent",
     "VerifiedClaim",
+    "WebhookFinding",
+    "WebhookInspectorResult",
+    "WebhookRequest",
+    "WebhookToolResult",
 ]

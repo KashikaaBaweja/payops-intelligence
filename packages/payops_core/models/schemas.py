@@ -152,6 +152,82 @@ class AnalystResult(BaseModel):
     metrics: list[MetricResult] = Field(default_factory=list)
 
 
+WebhookOperation = Literal[
+    "get_events_for_payment",
+    "find_missing_events",
+    "find_delayed_events",
+    "get_delivery_failures",
+    "find_retries",
+    "find_duplicate_events",
+    "correlate_events_and_payments",
+]
+
+
+class WebhookRequest(BaseModel):
+    """Validated webhook catalog call. Extra fields (including raw SQL) are rejected."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operation: WebhookOperation
+    window: TimeWindow | None = None
+    merchant_id: str | None = None
+    payment_id: str | None = None
+    delay_threshold_ms: int = 30_000
+
+
+class WebhookFinding(BaseModel):
+    kind: Literal["event", "missing", "delayed", "failed", "retry", "duplicate", "mismatch"]
+    payment_id: str
+    order_id: str | None = None
+    merchant_id: str | None = None
+    event_ids: list[str] = Field(default_factory=list)
+    event_type: str | None = None
+    delivery_status: str | None = None
+    delay_ms: int | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
+
+    def to_evidence(self) -> EvidenceItem:
+        suffix = self.event_ids[0] if self.event_ids else "none"
+        return EvidenceItem(
+            evidence_id=f"webhook-{self.kind}-{self.payment_id}-{suffix}",
+            source="webhook",
+            text_snippet=f"{self.kind} payment={self.payment_id} events={self.event_ids}",
+            metadata={
+                "kind": self.kind,
+                "payment_id": self.payment_id,
+                "order_id": self.order_id,
+                "merchant_id": self.merchant_id,
+                "event_ids": self.event_ids,
+                "event_type": self.event_type,
+                "delivery_status": self.delivery_status,
+                "delay_ms": self.delay_ms,
+                **self.details,
+            },
+        )
+
+
+class WebhookToolResult(BaseModel):
+    operation: str
+    findings: list[WebhookFinding] = Field(default_factory=list)
+    count: int = 0
+    window: TimeWindow | None = None
+    filters: dict[str, Any] = Field(default_factory=dict)
+    tool: str = "webhook_gateway"
+    source: str = "webhook_events"
+
+    def to_evidence_items(self) -> list[EvidenceItem]:
+        return [item.to_evidence() for item in self.findings]
+
+
+class WebhookInspectorResult(BaseModel):
+    """Webhook findings only. This is not a final investigation report."""
+
+    question: str
+    operations: list[str] = Field(default_factory=list)
+    results: list[WebhookToolResult] = Field(default_factory=list)
+    evidence: EvidenceBundle = Field(default_factory=EvidenceBundle)
+
+
 class Hypothesis(BaseModel):
     cause: str
     supporting_evidence_ids: list[str]
