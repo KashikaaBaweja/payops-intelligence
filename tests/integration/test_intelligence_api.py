@@ -9,7 +9,6 @@ from payops_core.rag.retriever import DocumentRetriever
 from payops_core.rag.vector_store import InMemoryVectorStore
 
 from apps.api.main import create_app
-from apps.api.store import InvestigationStore
 from tests.health_fixtures import HEALTH_WINDOW
 
 CORPUS = Path(__file__).resolve().parents[2] / "docs" / "corpus"
@@ -25,7 +24,6 @@ def api_client(tmp_path_factory):
     app = create_app()
     app.state.engine = engine
     app.state.retriever = DocumentRetriever(store)
-    app.state.investigations = InvestigationStore()
     with TestClient(app) as client:
         yield client
 
@@ -36,10 +34,18 @@ def test_openapi_documents_required_paths(api_client) -> None:
     for path in (
         "/investigations",
         "/investigations/{id}",
+        "/health/services",
+        "/documents",
         "/investigations/{id}/trace",
         "/merchants/{id}/health",
+        "/merchants/{id}/risk",
+        "/merchants/{id}/ml/classification",
+        "/merchants/{id}/ml/regression",
+        "/merchants/{id}/risk/what-if",
         "/merchants/{id}/metrics",
         "/evidence/{id}",
+        "/transactions/accounts",
+        "/transactions/transfers",
         "/health",
         "/health/ready",
     ):
@@ -90,6 +96,26 @@ def test_create_get_investigation_and_trace(api_client) -> None:
     assert evidence.status_code == 200
     assert evidence.json()["evidence_id"] == evidence_id
     assert evidence.json()["text_snippet"]
+
+
+def test_investigation_is_durable_across_sessions(api_client) -> None:
+    from payops_core.data.engine import session_factory
+
+    from apps.api.store import InvestigationStore
+
+    created = api_client.post(
+        "/investigations",
+        json={"question": "What does GATEWAY_TIMEOUT mean?", "max_iterations": 2},
+    )
+    assert created.status_code == 201
+    investigation_id = created.json()["investigation_id"]
+    engine = api_client.app.state.engine
+    with session_factory(engine)() as session:
+        record = InvestigationStore(session).get(investigation_id)
+    assert record is not None
+    assert record.status == "completed"
+    assert record.report is not None
+    assert record.trace
 
 
 def test_investigation_validation_and_not_found(api_client) -> None:

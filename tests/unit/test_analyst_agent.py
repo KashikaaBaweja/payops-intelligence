@@ -83,6 +83,17 @@ def test_agent_only_runs_query_metrics_tasks() -> None:
             window=CURRENT_WINDOW,
             task=Task(task_id="t2", task_type="retrieve_docs", rationale="docs"),
         )
+    compared = agent.analyze(
+        "Compare M102 vs M201",
+        window=CURRENT_WINDOW,
+        task=Task(
+            task_id="t3",
+            task_type="compare_merchants",
+            rationale="compare",
+            merchant_id="M102",
+        ),
+    )
+    assert "compare_merchants" in compared.operations
     session.close()
 
 

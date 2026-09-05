@@ -75,6 +75,10 @@ def test_rag_only_question(graph_deps) -> None:
     assert report.evidence_sufficient is True
     assert "incident_risk" in _nodes(state)
     assert "verifier" in _nodes(state)
+    assert report.retrieval is not None
+    assert report.retrieval.rounds
+    assert report.retrieval.latency_ms >= 0
+    assert any(event.action == "rag_search" for event in state["trace"])
 
 
 def test_sql_required_question(graph_deps) -> None:
@@ -108,7 +112,40 @@ def test_merchant_health_scorecard(graph_deps) -> None:
     assert "Incomplete investigation" not in report.executive_summary
 
 
-def test_insufficient_evidence_retry(graph_deps) -> None:
+def test_integrity_question_uses_catalog_not_simulator(graph_deps) -> None:
+    state = _run(
+        graph_deps,
+        "Are Harbor Retail M102 payments transactionally consistent under ACID invariants?",
+    )
+    report = report_from(state)
+    _assert_safe_trace(state)
+    assert [task.task_type for task in state["plan"].tasks] == ["validate_integrity"]
+    items = [item for item in state["evidence"].items if item.source == "integrity"]
+    assert items
+    assert items[0].metadata.get("passed") is True
+    assert "consistency violations" in report.likely_cause.cause.lower()
+    assert "classroom" not in report.executive_summary.lower()
+    assert report.evidence_sufficient is True
+
+
+def test_ml_risk_triggers_metrics_not_fraud_decision(graph_deps) -> None:
+    state = _run(graph_deps, "What is the predicted payment risk and expected loss for M102?")
+    report = report_from(state)
+    _assert_safe_trace(state)
+    assert [task.task_type for task in state["plan"].tasks] == [
+        "score_risk",
+        "query_metrics",
+        "score_regression",
+    ]
+    sources = {item.source for item in state["evidence"].items}
+    assert "ml" in sources
+    assert "metric" in sources
+    assert report.evidence_sufficient is True
+    assert "fraudulent" not in report.likely_cause.cause.lower()
+    assert all("is fraudulent" not in action.lower() for action in report.recommended_actions)
+
+
+def test_planned_tasks_drain_in_one_visit(graph_deps) -> None:
     state = _run(
         graph_deps,
         "Why did Harbor Retail M102 UPI payments fail with GATEWAY_TIMEOUT?",
@@ -118,13 +155,17 @@ def test_insufficient_evidence_retry(graph_deps) -> None:
     types = [task.task_type for task in state["plan"].tasks]
     assert "retrieve_docs" in types
     assert "query_metrics" in types
-    investigate_passes = [event for event in state["trace"] if event.node == "investigate"]
-    assert len(investigate_passes) >= 2
+    investigate_runs = [
+        event
+        for event in state["trace"]
+        if event.node == "investigate" and event.action == "run_task"
+    ]
+    assert {event.decision for event in investigate_runs} >= {"retrieve_docs", "query_metrics"}
     sources = {item.source for item in state["evidence"].items}
     assert "doc" in sources
     assert "metric" in sources
-    assert "refine" in _nodes(state)
-    assert state["iteration"] >= 2
+    assert state["iteration"] == 1
+    assert "refine" not in _nodes(state)
     assert report.evidence_sufficient is True
 
 
