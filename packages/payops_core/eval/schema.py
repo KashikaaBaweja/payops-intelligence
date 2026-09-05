@@ -11,6 +11,8 @@ Category = Literal[
     "ambiguous-question",
     "conflicting-evidence",
     "anomaly-investigation",
+    "ml-risk",
+    "transaction-integrity",
 ]
 
 

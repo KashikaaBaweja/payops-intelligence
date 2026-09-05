@@ -3,9 +3,19 @@ from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from payops_core.data.models import Merchant
+from payops_core.ml.errors import InsufficientTrainingData
 from payops_core.models.api import ErrorResponse, MerchantMetricsResponse
-from payops_core.models.schemas import AnalyticsOperation, AnalyticsRequest, MerchantHealthScore
+from payops_core.models.schemas import (
+    AnalyticsOperation,
+    AnalyticsRequest,
+    MerchantHealthScore,
+    MerchantRiskScore,
+    RegressionScore,
+    RiskWhatIfRequest,
+    RiskWhatIfScore,
+)
 from payops_core.tools.merchant_health import score_merchant
+from payops_core.tools.ml_risk import score_latency, score_risk, what_if_risk
 from payops_core.tools.sql_gateway import ALLOWED_OPERATIONS, SqlToolGateway
 from sqlalchemy.orm import Session
 
@@ -54,6 +64,108 @@ def merchant_health(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     store.index_evidence([result.to_evidence()])
     return result
+
+
+@router.get(
+    "/merchants/{id}/risk",
+    response_model=MerchantRiskScore,
+    responses=_ERROR_RESPONSES,
+    summary="Payment-outcome classifier",
+    description=(
+        "Logistic failure classifier on leakage-safe payment features. "
+        "Holdout accuracy/precision/recall/F1/ROC-AUC. Not a fraud decision. "
+        "Does not run the capture-latency regressor."
+    ),
+)
+def merchant_risk(
+    id: str,
+    start: datetime | None = Query(default=None),
+    end: datetime | None = Query(default=None),
+    session: Session = Depends(get_session),
+    store: InvestigationStore = Depends(get_store),
+) -> MerchantRiskScore:
+    merchant_id = require_id(id, "id")
+    _require_merchant(session, merchant_id)
+    window = parse_window(start, end)
+    try:
+        result = score_risk(session, merchant_id, window)
+    except InsufficientTrainingData as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    store.index_evidence([result.to_evidence()])
+    return result
+
+
+@router.get(
+    "/merchants/{id}/ml/classification",
+    response_model=MerchantRiskScore,
+    responses=_ERROR_RESPONSES,
+    summary="Payment-outcome classifier",
+)
+def merchant_classification(
+    id: str,
+    start: datetime | None = Query(default=None),
+    end: datetime | None = Query(default=None),
+    session: Session = Depends(get_session),
+    store: InvestigationStore = Depends(get_store),
+) -> MerchantRiskScore:
+    return merchant_risk(id, start, end, session, store)
+
+
+@router.get(
+    "/merchants/{id}/ml/regression",
+    response_model=RegressionScore,
+    responses=_ERROR_RESPONSES,
+    summary="Capture-latency regressor",
+    description="Ridge regression on captured_at − created_at. Separate from the classifier.",
+)
+def merchant_regression(
+    id: str,
+    start: datetime | None = Query(default=None),
+    end: datetime | None = Query(default=None),
+    session: Session = Depends(get_session),
+    store: InvestigationStore = Depends(get_store),
+) -> RegressionScore:
+    merchant_id = require_id(id, "id")
+    _require_merchant(session, merchant_id)
+    window = parse_window(start, end)
+    try:
+        result = score_latency(session, merchant_id, window)
+    except InsufficientTrainingData as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    store.index_evidence([result.to_evidence()])
+    return result
+
+
+@router.post(
+    "/merchants/{id}/risk/what-if",
+    response_model=RiskWhatIfScore,
+    responses=_ERROR_RESPONSES,
+    summary="What-if payment risk score",
+    description="Rescore one hypothetical payment. Does not persist or decide fraud.",
+)
+def merchant_risk_what_if(
+    id: str,
+    payload: RiskWhatIfRequest,
+    session: Session = Depends(get_session),
+) -> RiskWhatIfScore:
+    merchant_id = require_id(id, "id")
+    _require_merchant(session, merchant_id)
+    try:
+        return what_if_risk(
+            session,
+            merchant_id,
+            method_id=payload.method_id,
+            amount_cents=payload.amount_cents,
+            hour=payload.hour,
+            weekday=payload.weekday,
+            prior_fail_rate=payload.prior_fail_rate,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get(
