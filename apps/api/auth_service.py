@@ -38,9 +38,13 @@ def get_user(session: Session, user_id: str) -> AuthUser | None:
 
 
 def count_active_admins(session: Session, exclude_user_id: str | None = None) -> int:
-    stmt = select(func.count()).select_from(AuthUser).where(
-        AuthUser.role == "admin",
-        AuthUser.status == "active",
+    stmt = (
+        select(func.count())
+        .select_from(AuthUser)
+        .where(
+            AuthUser.role == "admin",
+            AuthUser.status == "active",
+        )
     )
     if exclude_user_id:
         stmt = stmt.where(AuthUser.user_id != exclude_user_id)

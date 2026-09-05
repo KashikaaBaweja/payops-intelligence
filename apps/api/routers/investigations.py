@@ -100,6 +100,7 @@ def _response(record: StoredInvestigation) -> InvestigationResponse:
         duration_ms=record.duration_ms,
     )
 
+
 _ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"model": ErrorResponse, "description": "Invalid request"},
     404: {"model": ErrorResponse, "description": "Investigation not found"},

@@ -118,9 +118,7 @@ def score_capture_latency(
     ]
     rows = [row for row in in_window if row.payment_id not in fitted.train_payment_ids]
     if not rows:
-        raise ValueError(
-            "no out-of-sample captured payments in the window for latency regression"
-        )
+        raise ValueError("no out-of-sample captured payments in the window for latency regression")
     matrix = [list(row.values) for row in rows]
     predicted = fitted.model.predict(matrix)
     mean_hat = float(sum(predicted) / len(predicted))

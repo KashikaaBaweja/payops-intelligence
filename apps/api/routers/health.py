@@ -56,7 +56,11 @@ def services(settings: Settings = Depends(get_app_settings)) -> SystemHealthResp
     ]
     try:
         ping_database()
-        items.append(ServiceStatus(name="database", status="ok", detail=settings.database_url.split("://")[0]))
+        items.append(
+            ServiceStatus(
+                name="database", status="ok", detail=settings.database_url.split("://")[0]
+            )
+        )
     except Exception:
         items.append(ServiceStatus(name="database", status="down", detail="unreachable"))
     items.append(

@@ -29,7 +29,41 @@ from payops_core.tools.merchant_health import score_merchant
 
 def planner_node(state: InvestigationState) -> dict:
     question = state["question"]
+    input_method = state.get("input_method") or "text"
+    query_language = state.get("query_language") or "en"
+    retrieval = state.get("retrieval_query")
     plan = PlannerAgent().plan(question, merchant_id=state.get("merchant_id"))
+    traces = [
+        safe_trace(
+            node="planner",
+            action="accept_query",
+            search_query=question,
+            decision=input_method if input_method == "voice" else "text",
+        ),
+        safe_trace(
+            node="planner",
+            action="query_language",
+            search_query=question,
+            decision=query_language,
+        ),
+    ]
+    if retrieval:
+        traces.append(
+            safe_trace(
+                node="planner",
+                action="retrieval_query",
+                search_query=retrieval,
+                decision="glossary_expand",
+            )
+        )
+    traces.append(
+        safe_trace(
+            node="planner",
+            action="plan",
+            search_query=question,
+            decision=",".join(task.task_type for task in plan.tasks) or "none",
+        )
+    )
     return {
         "plan": plan,
         "merchant_id": plan.merchant_id,
@@ -37,14 +71,7 @@ def planner_node(state: InvestigationState) -> dict:
         "pending_tasks": list(plan.tasks),
         "evidence": state.get("evidence") or EvidenceBundle(),
         "metrics": state.get("metrics") or [],
-        "trace": [
-            safe_trace(
-                node="planner",
-                action="plan",
-                search_query=question,
-                decision=",".join(task.task_type for task in plan.tasks) or "none",
-            )
-        ],
+        "trace": traces,
     }
 
 
@@ -118,11 +145,7 @@ def investigate_node(state: InvestigationState, runtime: GraphRuntime) -> dict:
         "evidence": evidence,
         "metrics": combined_metrics,
         "retrieval": retrieval,
-        "error": (
-            "; ".join(failures)
-            if failures and not completed
-            else state.get("error")
-        ),
+        "error": ("; ".join(failures) if failures and not completed else state.get("error")),
         "trace": traces,
     }
 
@@ -271,6 +294,9 @@ def writer_node(state: InvestigationState) -> dict:
         error=state.get("error"),
         timed_out=bool(state.get("timed_out")),
         retrieval=state.get("retrieval"),
+        query_language=state.get("query_language") or "en",
+        response_language=state.get("response_language") or "en",
+        retrieval_query=state.get("retrieval_query"),
     )
     return {
         "report": report,

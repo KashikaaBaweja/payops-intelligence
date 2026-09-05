@@ -46,7 +46,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Compose up
-        run: docker compose -f docker/docker-compose.yml up --build -d
+        run: |
+          if ! docker compose -f docker/docker-compose.yml up --build -d; then
+            docker compose -f docker/docker-compose.yml logs
+            exit 1
+          fi
       - name: Wait for API readiness
         run: |
           for i in $(seq 1 60); do
@@ -62,7 +66,10 @@ jobs:
           curl -fsS http://127.0.0.1:8000/health
           curl -fsS http://127.0.0.1:8000/health/ready
           curl -fsS http://127.0.0.1:3001/health
-          curl -fsS -X POST http://127.0.0.1:8000/investigations \
+          curl -fsS -c /tmp/payintel.cj -X POST http://127.0.0.1:8000/auth/signup \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"CI Operator","email":"ci@payintel.test","password":"Testuser1!x","confirm_password":"Testuser1!x"}'
+          curl -fsS -b /tmp/payintel.cj -X POST http://127.0.0.1:8000/investigations \
             -H 'Content-Type: application/json' \
             -d '{"question":"What does GATEWAY_TIMEOUT mean?","max_iterations":2}' \
             | python3 -c "import json,sys; body=json.load(sys.stdin); assert body['status']=='completed', body"

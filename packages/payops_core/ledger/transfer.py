@@ -154,9 +154,7 @@ def run_ledger_transfer(
                     after_to=after_dest,
                 )
             except Exception:
-                logger.exception(
-                    "ledger rollback audit persist failed transfer_id=%s", transfer_id
-                )
+                logger.exception("ledger rollback audit persist failed transfer_id=%s", transfer_id)
             return _result(
                 transfer_id=transfer_id,
                 status="rolled_back",
@@ -198,9 +196,7 @@ def list_recent_transfers(engine: Engine, limit: int = 8) -> list[TransferResult
     isolation, reason = isolation_for(engine)
     with Session(engine) as session:
         rows = list(
-            session.query(LedgerTransfer)
-            .order_by(LedgerTransfer.created_at.desc())
-            .limit(limit)
+            session.query(LedgerTransfer).order_by(LedgerTransfer.created_at.desc()).limit(limit)
         )
         ids = [row.transfer_id for row in rows]
         audits_by_id: dict[str, list[TransferAuditEvent]] = {item_id: [] for item_id in ids}

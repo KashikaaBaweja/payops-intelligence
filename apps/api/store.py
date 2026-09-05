@@ -70,9 +70,7 @@ class InvestigationStore:
     def list_recent(self, limit: int = 20) -> list[StoredInvestigation]:
         rows = list(
             self.session.scalars(
-                select(InvestigationRun)
-                .order_by(InvestigationRun.created_at.desc())
-                .limit(limit)
+                select(InvestigationRun).order_by(InvestigationRun.created_at.desc()).limit(limit)
             )
         )
         if not rows:
@@ -129,9 +127,7 @@ class InvestigationStore:
         evidence = [EvidenceItem.model_validate(item.payload_json) for item in evidence_rows]
         return self._from_row(row, evidence)
 
-    def _from_row(
-        self, row: InvestigationRun, evidence: list[EvidenceItem]
-    ) -> StoredInvestigation:
+    def _from_row(self, row: InvestigationRun, evidence: list[EvidenceItem]) -> StoredInvestigation:
         duration_ms = getattr(row, "duration_ms", None)
         if duration_ms is None and row.created_at and row.updated_at:
             delta = (row.updated_at - row.created_at).total_seconds()

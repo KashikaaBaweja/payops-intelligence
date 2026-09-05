@@ -40,9 +40,7 @@ class SufficiencyAgent:
                 next_action="investigate",
                 reason="planner produced no tasks",
             )
-        present = {
-            item.source for item in evidence.items if not item.metadata.get("error")
-        }
+        present = {item.source for item in evidence.items if not item.metadata.get("error")}
         missing: list[EvidenceGap] = []
         for task in plan.tasks:
             needed = _SOURCE_FOR_TASK.get(task.task_type, "doc")

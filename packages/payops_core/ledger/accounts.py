@@ -58,6 +58,4 @@ def seed_ledger_accounts(session: Session) -> None:
 def list_accounts(session: Session) -> list[LedgerAccount]:
     seed_ledger_accounts(session)
     session.flush()
-    return list(
-        session.scalars(select(LedgerAccount).order_by(LedgerAccount.account_id.asc()))
-    )
+    return list(session.scalars(select(LedgerAccount).order_by(LedgerAccount.account_id.asc())))
