@@ -1,24 +1,31 @@
-# PayOps Intelligence
+# PayIntel AI
 
-Autonomous investigation agent for payment operations. This repository is at **Phase 13**: production engineering hardening.
+Agentic Payment Intelligence & Research Platform. Package names remain `payops_*` so existing imports and Docker images keep working.
 
-See [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).
+This is **not a chatbot**. A user question runs a LangGraph investigation:
+
+**query → plan → research → retrieve → evaluate evidence → more search if needed → data/ML if needed → transaction integrity if needed → critique → report**
+
+The console shows sources, metrics, model quality, integrity checks, and a safe agent trace. It does not display private chain-of-thought.
+
+See [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) and [docs/adr/008-payintel-agents.md](docs/adr/008-payintel-agents.md).
 
 ## Current scope
 
-- Python package layout, FastAPI `/health` and `/health/ready`, config, logging, Docker
-- PostgreSQL-compatible SQLAlchemy models and Alembic migrations
-- Deterministic fictional seed data (no real customer information)
-- Document ingestion (PDF, Markdown, TXT, JSON), chunking, embeddings, and retrieval
-- Researcher, Data Analyst, and Webhook Inspector tools
-- LangGraph orchestration: plan → investigate → aggregate → sufficiency → (retry or verify/write/critic)
-- Verifier checks claims against evidence (unsupported, contradictory, missing, weak) and can request another investigation pass
-- Critic reviews the draft report; the Writer cannot override verifier findings
-- Deterministic merchant health score with factors, penalties, and recommendations — no ML model
-- Production-style HTTP API with Pydantic schemas, request IDs, structured logs, and OpenAPI docs
-- Investigation console (Next.js): trace pipeline, evidence, metrics, health, and report — no hidden chain-of-thought
-- Safe execution traces (node, action, tool, query, evidence IDs, decision, verification) — no private chain-of-thought
-- Docker Compose (Postgres + API + dashboard), container boot (wait / migrate / seed), CI lint-format-typecheck-test-compose smoke
+- LangGraph orchestration with explicit state transitions; agents are typed Python classes, not one giant prompt
+- Agentic RAG: query analysis → retrieve → relevance/rerank → rewrite if insufficient, capped by `PAYOPS_RAG_MAX_ITERATIONS`. Citations, latency, and search rounds are logged. No LLM answer step.
+- Researcher formulates seed queries; Retrieval Agent executes `search_docs`; Hindi/English glossary expansion (not multilingual embeddings)
+- Data Analyst catalog (allowlisted SQL) and Webhook Inspector
+- ML Agent: selector routes classification (failure logistic) or capture-latency regression; holdout metrics are computed, never invented — not a fraud decision
+- Transaction Integrity Agent: read-time consistency checks against schema invariants
+- Live ledger transfer: debit/credit/journal in one SQL transaction with injectable rollback (`POST /transactions/transfers`)
+- Verifier + Critic; Writer cannot override verifier findings
+- Explainable merchant health scorecard
+- Durable audit store (`investigation_runs`, `evidence_index`)
+- Next.js console with pipeline, evidence, metrics, and report
+- Docker Compose (Postgres + API + dashboard)
+
+Default retrieval uses a hashing bag-of-words embedder. There is no LLM client and no LangChain runtime. Demo mode does not require API keys.
 
 ## API
 
@@ -30,8 +37,18 @@ See [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).
 | `GET` | `/investigations/{id}` | Fetch the report |
 | `GET` | `/investigations/{id}/trace` | Fetch the execution trace |
 | `GET` | `/merchants/{id}/health` | Explainable health score |
+| `GET` | `/merchants/{id}/risk` | Failure-classifier score (alias of `/ml/classification`) |
+| `GET` | `/merchants/{id}/ml/classification` | Failure-classifier score and holdout metrics |
+| `GET` | `/merchants/{id}/ml/regression` | Capture-latency regressor score and holdout metrics |
+| `POST` | `/merchants/{id}/risk/what-if` | Rescore a hypothetical payment (classifier only) |
 | `GET` | `/merchants/{id}/metrics` | Catalog payment metrics |
 | `GET` | `/evidence/{id}` | Resolve a cited evidence item |
+| `GET` | `/transactions/accounts` | Ledger wallet balances |
+| `POST` | `/transactions/transfers` | Debit/credit/ledger transfer (`fail_at` forces ROLLBACK) |
+| `GET` | `/transactions/transfers/{id}` | Persisted transfer + audit events |
+| `GET` | `/investigations` | List recent investigation runs |
+| `GET` | `/documents` | Corpus files on disk |
+| `GET` | `/health/services` | Live API, database, vector, LLM, agents, ML status |
 | `GET` | `/docs` | OpenAPI UI |
 
 Every response includes `X-Request-ID`. Errors return `{error, detail, status_code, request_id}`. Local demo mode does not require API keys.

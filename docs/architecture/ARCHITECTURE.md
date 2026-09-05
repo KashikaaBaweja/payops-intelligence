@@ -1,8 +1,8 @@
-# PayOps Intelligence — System Architecture
+# PayIntel AI — System Architecture
 
-**Subtitle:** Autonomous AI Agent for Payment Operations, Merchant Research and Incident Investigation
+**Subtitle:** Agentic Payment Intelligence & Research Platform
 
-> Disclaimer: This is an original system inspired by publicly known payment-platform concepts (payments, refunds, settlements, disputes, webhooks). It is not modeled on any company's internal architecture and uses 100% synthetic data.
+> Disclaimer: Original system on synthetic payment data. Demo mode does not call an LLM. Retrieval defaults to a hashing embedder. Hindi support is glossary expansion, not multilingual semantic embeddings. Integrity checks are read-time consistency, not a commit/rollback simulator.
 
 ---
 
@@ -12,7 +12,7 @@ The system answers operational investigation questions like:
 
 > "Why did Merchant M102's payment success rate decrease between 10 AM and 12 PM, what caused the problem, what evidence supports the conclusion, and what should the operations team do?"
 
-It behaves like a junior payments-ops analyst who can read docs, query metrics, inspect webhook logs, form a hypothesis, check their own work, and write a report — with every step auditable. The differentiator versus a "RAG chatbot" is: **multi-agent planning, tool-grounded evidence, self-critique, and a visible execution trace**, not just "search docs and answer."
+It behaves like a junior payments-ops analyst who can read docs, query metrics, inspect webhook logs, score a risk model, validate payment consistency, form a hypothesis, check their own work, and write a report — with every step auditable. The differentiator versus a "RAG chatbot" is: **multi-agent planning, tool-grounded evidence, self-critique, and a visible execution trace**, not just "search docs and answer."
 
 ---
 
@@ -23,41 +23,25 @@ It behaves like a junior payments-ops analyst who can read docs, query metrics, 
                               │        Frontend (Next.js)    │
                               │  Investigation UI + Timeline │
                               └──────────────┬───────────────┘
-                                             │ REST/SSE
+                                             │ REST
                               ┌──────────────▼───────────────┐
                               │        API Layer (FastAPI)    │
                               │  /investigations, /health,    │
-                              │  /evidence, /reports          │
+                              │  /evidence, /merchants        │
                               └──────────────┬───────────────┘
                                              │
                               ┌──────────────▼───────────────┐
                               │     LangGraph Orchestrator    │
                               │   (typed shared state graph)  │
                               └──────────────┬───────────────┘
-              ┌───────────────┬──────────────┼──────────────┬────────────────┐
-              ▼               ▼              ▼              ▼                ▼
-        Planner Agent   Researcher Agent  Data Analyst   Incident/Risk   Evidence
-                          (RAG)           Agent (SQL)     Agent          Sufficiency
-                                                                          Agent
-                                                                             │
-                                                                    insufficient? loop
-                                                                             │
-                                                                             ▼
-                                                                      Verifier Agent
-                                                                             │
-                                                                             ▼
-                                                                       Critic Agent
-                                                                             │
-                                                                             ▼
-                                                                       Writer Agent
-                                                                             │
-                                                                             ▼
-                                                                     Final Report + Trace
-              │
-              ▼
+
+        planner → investigate (research / retrieve / SQL / ML / integrity)
+                → sufficiency ⇄ refine → incident → verifier ⇄ refine
+                → writer ⇄ critic → report + safe trace
+
   ┌───────────────────────┐   ┌────────────────────┐   ┌─────────────────────┐
-  │ Vector Store (Chroma/  │   │ Postgres (synthetic│   │ Event Store          │
-  │ pgvector) — docs        │   │ payments schema)    │   │ (webhook_events)     │
+  │ Vector store (memory  │   │ Postgres (synthetic│   │ Audit store          │
+  │ default; pgvector opt)│   │ payments schema)    │   │ investigation_runs   │
   └───────────────────────┘   └────────────────────┘   └─────────────────────┘
 ```
 
@@ -79,43 +63,53 @@ It behaves like a junior payments-ops analyst who can read docs, query metrics, 
 
 ### 3.2 Planner Agent
 - Input: raw user question.
-- Output: structured `InvestigationPlan` — list of `Task` objects, each with `task_type` (`retrieve_docs`, `query_metrics`, `inspect_webhooks`, `compare_merchants`, …), rationale, and required evidence category.
+- Output: structured `InvestigationPlan` — list of `Task` objects, each with `task_type` (`retrieve_docs`, `query_metrics`, `inspect_webhooks`, `merchant_health`, `score_risk`, `score_regression`, `validate_integrity`, …), rationale, and required evidence category.
 - Uses a keyword planner with a strict Pydantic `InvestigationPlan` — no free text is allowed to leak into control flow.
 
-### 3.3 Researcher Agent (Standard + Agentic RAG)
-- Executes `retrieve_docs` tasks.
-- Retrieval tool signature: `search_docs(query, filters: DocFilter, top_k)`.
-- Metadata filters: `doc_type` (api_docs, runbook, refund_policy, error_codes, …), `product_area`, `recency`.
+### 3.3 Research Agent and Retrieval Agent
+- Researcher formulates queries (including Hindi/English glossary expansion) and rejects irrelevant hits.
+- Retrieval Agent only executes `search_docs(query, doc_type, top_k)`.
+- Default embedder is hashing bag-of-words cosine. This is lexical retrieval, not multilingual semantic RAG.
 - Returns `EvidenceItem` objects: `{source, doc_id, section, chunk_id, score, text_snippet, metadata}`.
-- Can be re-invoked by the Evidence Sufficiency Agent with a refined query (this is what makes it "agentic" rather than single-shot RAG).
+- Sufficiency or verifier can queue another `retrieve_docs` task (graph-level refine).
+- Inside each `retrieve_docs` task, `run_agentic_rag` loops retrieve → relevance → rewrite up to `rag_max_iterations`. It records search rounds, latency, and citations. It does not generate an uncited LLM answer.
 
 ### 3.4 Data Analyst Agent
 - Executes `query_metrics` tasks via the **SQL Tool Gateway** (Section 5) — never raw SQL from the LLM.
 - Available operations: success rate, failure rate, breakdown by method/error code, time-window comparison, merchant comparison, refund rate, dispute rate, webhook delivery failure rate.
 - Returns typed `MetricResult` objects with numeric values, time windows, and the exact operation used (fully reproducible).
 
-### 3.5 Incident/Risk Agent
+### 3.5 ML Agent
+- `select_ml_task` decides classification, regression, both, descriptive analysis, or no ML.
+- Classification (`score_risk`): logistic P(fail). Regression (`score_regression`): Ridge capture latency. The two models are never mixed into one quality blob.
+- Holdout quality is computed from predictions. A HIGH classifier score triggers investigation; it is not a fraud decision.
+
+### 3.6 Transaction Integrity Agent
+- Executes `validate_integrity`. Counts consistency violations (failed-without-error, missing capture, merchant/order mismatch, over-refund, orphan webhooks).
+- Reports schema-enforced invariants. Live commit/rollback is a separate ledger transfer (ADR-010).
+
+### 3.7 Incident/Risk Agent
 - Consumes evidence + metrics gathered so far.
 - Produces ranked `Hypothesis` objects: `{cause, supporting_evidence_ids[], confidence}`.
 - Does not invent new evidence — it only correlates what Researcher/Data Analyst/webhook tool already returned.
 
-### 3.6 Evidence Sufficiency Agent
+### 3.8 Evidence Sufficiency Agent
 - The core "agentic RAG" decision point.
 - Input: current `EvidenceBundle` + original plan.
 - Output: `SufficiencyVerdict { sufficient: bool, missing: List[EvidenceGap], next_action }`.
 - If insufficient and `iterations < max_iterations` → route back to Researcher/Data Analyst with a refined sub-task.
 - If insufficient and iterations exhausted → route to Writer with an explicit "evidence insufficient" flag (never silently guesses).
 
-### 3.7 Verifier Agent
+### 3.9 Verifier Agent
 - Takes the Incident/Risk Agent's leading hypothesis and the draft claims.
 - Checks each claim against `evidence_ids` — flags any claim without a supporting citation as `unsupported`.
 - Can force one more Researcher/Data Analyst call if a specific claim needs backing.
 
-### 3.8 Critic Agent
+### 3.10 Critic Agent
 - Reviews the near-final report for completeness (does it answer the original question?), internal consistency, and unsupported conclusions.
 - Can send the draft back to Writer once with specific revision instructions (bounded — max 1 revision loop to avoid oscillation).
 
-### 3.9 Writer Agent
+### 3.11 Writer Agent
 - Produces the final structured `IncidentReport` (schema in Section 8).
 - Only allowed to reference evidence already present in `EvidenceBundle` — enforced by giving it a closed context, not open retrieval.
 
@@ -143,25 +137,13 @@ class InvestigationState(TypedDict):
 
 ### 4.2 Graph edges
 ```
-START → intake → planner → dispatch (parallel fan-out)
-dispatch → researcher, data_analyst, webhook_inspector   (parallel, per plan tasks)
-{researcher, data_analyst, webhook_inspector} → aggregate_evidence
-aggregate_evidence → sufficiency_evaluator
-
-sufficiency_evaluator --insufficient & iteration < max--> refine_tasks → dispatch
-sufficiency_evaluator --insufficient & iteration >= max--> writer (flag: incomplete)
-sufficiency_evaluator --sufficient--> incident_risk_agent
-
-incident_risk_agent → verifier
-verifier --unsupported claim, budget left--> refine_tasks → dispatch
-verifier --ok / budget exhausted--> critic
-
-critic --revise (max 1x)--> writer_revise → critic
-critic --approved--> writer → END
+START → planner → investigate (drains pending tasks in one visit)
+investigate → aggregate → sufficiency
+sufficiency ⇄ refine → incident_risk → verifier ⇄ refine → writer ⇄ critic → END
 ```
 
-- **Loop guard:** every loop-back increments `iteration`; a hard `max_iterations` (config, default 3) forces exit to Writer with an explicit "evidence insufficient" report rather than infinite looping.
-- **Parallel fan-out** uses LangGraph's parallel branches with a join (`aggregate_evidence`) — this is where "multi-document retrieval + structured data analysis" run concurrently, demonstrating real orchestration rather than a linear chain.
+- **Loop guard:** every loop-back increments `iteration`; a hard `max_iterations` forces exit to Writer with an explicit "evidence insufficient" report rather than infinite looping.
+- **Investigate** drains every pending catalog task in one visit. That is sequential tool execution, not LangGraph parallel fan-out.
 
 ---
 
@@ -182,6 +164,16 @@ critic --approved--> writer → END
 
 ### 5.4 Merchant Health Tool
 - Deterministic scoring function (not an LLM) combining: success rate, failure rate, refund rate, dispute rate, webhook reliability, recent anomaly severity — each weighted, each exposed individually in the output so the score is explainable, not a black box.
+
+### 5.5 Scoped ML tools
+- Separate classifier and capture-latency regressor on the existing `payments` table (ADR-006).
+- Features are leakage-safe (no `status` / `error_code`). Classification holdout includes accuracy, P/R/F1, confusion, and ROC-AUC. Regression holdout is MAE/RMSE/R².
+- A HIGH classifier score is evidence that the graph should investigate. It is not a fraud decision.
+
+### 5.6 Live ledger transfer
+- `POST /transactions/transfers` runs `BEGIN → debit → credit → journal → COMMIT` on `ledger_*` tables (ADR-010).
+- `fail_at` injects a failure after a named step. The same SQL transaction rolls back; a second session reads the original balances.
+- Isolation is SQLite `IMMEDIATE` or PostgreSQL `SERIALIZABLE`. Audit rows for a rollback are written in a follow-up transaction so the UI can show the failed attempt.
 
 All tools return **typed Pydantic models**, are independently unit-testable, and are the only boundary through which agents touch data — this is the seam that makes the system safe to demo and safe to extend.
 
