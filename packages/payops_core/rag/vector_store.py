@@ -21,6 +21,8 @@ class StoredChunk:
 class VectorStore(Protocol):
     def upsert(self, records: list[StoredChunk]) -> None: ...
 
+    def count(self) -> int: ...
+
     def search(
         self,
         query_embedding: list[float],
@@ -40,6 +42,9 @@ class InMemoryVectorStore:
         for record in records:
             existing[record.chunk.chunk_id] = record
         self._records = list(existing.values())
+
+    def count(self) -> int:
+        return len(self._records)
 
     def search(
         self,
@@ -116,6 +121,10 @@ class PgVectorStore:
                         "embedding": _vector_literal(record.embedding),
                     },
                 )
+
+    def count(self) -> int:
+        with self.engine.connect() as conn:
+            return int(conn.execute(text("SELECT COUNT(*) FROM document_chunks")).scalar() or 0)
 
     def search(
         self,

@@ -73,6 +73,14 @@ def test_source_references_are_preserved() -> None:
         assert item.metadata["section"] == item.section
 
 
+def test_hindi_question_expands_and_retrieves() -> None:
+    result = _agent().research("GATEWAY_TIMEOUT का मतलब क्या है?")
+    queries = " ".join(query.query for query in result.queries)
+    assert "meaning" in queries.lower()
+    combined = " ".join(item.text_snippet for item in result.evidence.items)
+    assert "GATEWAY_TIMEOUT" in combined
+
+
 def test_researcher_only_runs_retrieve_docs_tasks() -> None:
     agent = _agent()
     task = Task(
