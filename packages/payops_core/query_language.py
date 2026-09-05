@@ -66,7 +66,7 @@ def detect_query_language(text: str) -> QueryLanguage:
 
 
 def normalize_language_choice(value: str | None) -> LanguageChoice:
-    if value in {"en", "hi", "hi-latn", "auto"}:
+    if value == "en" or value == "hi" or value == "hi-latn" or value == "auto":
         return value
     return "auto"
 
@@ -79,7 +79,9 @@ def resolve_response_language(text: str, choice: str | None = "auto") -> QueryLa
 
 
 def language_label(code: str) -> str:
-    return LANGUAGE_LABELS.get(code, LANGUAGE_LABELS["en"])  # type: ignore[arg-type]
+    if code == "en" or code == "hi" or code == "hi-latn":
+        return LANGUAGE_LABELS[code]
+    return LANGUAGE_LABELS["en"]
 
 
 def speech_recognition_lang(choice: str | None, draft: str = "") -> str:

@@ -20,24 +20,28 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
-        op.execute("CREATE EXTENSION IF NOT EXISTS vector")
-        op.execute(
-            """
-            CREATE TABLE document_chunks (
-                chunk_id VARCHAR(64) PRIMARY KEY,
-                document_id VARCHAR(64) NOT NULL,
-                source TEXT NOT NULL,
-                section TEXT NOT NULL,
-                body TEXT NOT NULL,
-                metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-                embedding vector(128) NOT NULL
+        vector_available = bind.execute(
+            sa.text("SELECT 1 FROM pg_available_extensions WHERE name = 'vector'")
+        ).scalar()
+        if vector_available:
+            op.execute("CREATE EXTENSION IF NOT EXISTS vector")
+            op.execute(
+                """
+                CREATE TABLE document_chunks (
+                    chunk_id VARCHAR(64) PRIMARY KEY,
+                    document_id VARCHAR(64) NOT NULL,
+                    source TEXT NOT NULL,
+                    section TEXT NOT NULL,
+                    body TEXT NOT NULL,
+                    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    embedding vector(128) NOT NULL
+                )
+                """
             )
-            """
-        )
-        op.execute(
-            "CREATE INDEX ix_document_chunks_document_id ON document_chunks (document_id)"
-        )
-        return
+            op.execute(
+                "CREATE INDEX ix_document_chunks_document_id ON document_chunks (document_id)"
+            )
+            return
     op.create_table(
         "document_chunks",
         sa.Column("chunk_id", sa.String(length=64), primary_key=True),

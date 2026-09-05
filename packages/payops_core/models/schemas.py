@@ -387,6 +387,10 @@ class IncidentReport(BaseModel):
     agent_execution_summary: list[TraceEvent] = Field(default_factory=list)
     evidence_sufficient: bool
     retrieval: RetrievalSummary | None = None
+    original_query: str | None = None
+    query_language: Literal["en", "hi", "hi-latn"] = "en"
+    response_language: Literal["en", "hi", "hi-latn"] = "en"
+    retrieval_query: str | None = None
 
 
 class HealthFactor(BaseModel):

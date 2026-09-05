@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from payops_core.auth.audit import EVENT_RESEARCH_COMPLETED, EVENT_RESEARCH_STARTED, record_audit
 from payops_core.data.models import AuthUser, Merchant
 from payops_core.graph.build import report_from, run_investigation
+from payops_core.graph.state import InvestigationState
 from payops_core.models.api import (
     ErrorResponse,
     InvestigationCreateRequest,
@@ -33,7 +34,7 @@ logger = getLogger(__name__)
 router = APIRouter(tags=["investigations"], dependencies=[Depends(get_current_user)])
 
 
-def _status_from_state(state: dict[str, Any]) -> tuple[str, str | None]:
+def _status_from_state(state: InvestigationState | dict[str, Any]) -> tuple[str, str | None]:
     if state.get("timed_out"):
         return "failed", str(state.get("error") or "Investigation timed out")[:300]
     if state.get("error"):
@@ -174,7 +175,7 @@ def create_investigation(
         metadata={"input_method": payload.input_method},
     )
     session.commit()
-    state: dict[str, Any] | None = None
+    state: InvestigationState | dict[str, Any] | None = None
     try:
         state = run_investigation(
             query,
@@ -188,7 +189,7 @@ def create_investigation(
         report = report_from(state)
     except Exception as exc:
         logger.exception("investigation_failed", extra={"investigation_id": investigation_id})
-        failed = state or {}
+        failed: dict[str, Any] = dict(state or {})
         store.put(
             StoredInvestigation(
                 investigation_id=investigation_id,
@@ -205,7 +206,7 @@ def create_investigation(
         )
         raise HTTPException(status_code=500, detail="Investigation failed") from None
     run_status, error = _status_from_state(state)
-    evidence = list((state.get("evidence") or EvidenceBundle()).items)
+    evidence = list((state.get("evidence") or EvidenceBundle()).items)  # type: ignore[union-attr]
     duration_ms = _elapsed_ms(started)
     record = StoredInvestigation(
         investigation_id=investigation_id,

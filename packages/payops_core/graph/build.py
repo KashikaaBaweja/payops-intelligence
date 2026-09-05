@@ -37,6 +37,11 @@ from payops_core.graph.nodes import (
 from payops_core.graph.runtime import GraphRuntime
 from payops_core.graph.state import InvestigationState
 from payops_core.models.schemas import EvidenceBundle, IncidentReport
+from payops_core.query_language import (
+    detect_query_language,
+    resolve_response_language,
+    retrieval_query,
+)
 from payops_core.rag.retriever import DocumentRetriever
 
 
@@ -44,9 +49,15 @@ def initial_state(
     question: str,
     max_iterations: int,
     merchant_id: str | None = None,
+    input_method: str = "text",
+    language: str = "auto",
 ) -> InvestigationState:
     return {
         "question": question,
+        "input_method": input_method if input_method == "voice" else "text",
+        "query_language": detect_query_language(question),
+        "response_language": resolve_response_language(question, language),
+        "retrieval_query": retrieval_query(question),
         "merchant_id": merchant_id,
         "time_window": None,
         "plan": None,
@@ -124,6 +135,8 @@ def run_investigation(
     max_iterations: int | None = None,
     timeout_seconds: float | None = None,
     merchant_id: str | None = None,
+    input_method: str = "text",
+    language: str = "auto",
 ) -> InvestigationState:
     settings = get_settings()
     runtime = GraphRuntime(
@@ -138,6 +151,8 @@ def run_investigation(
             question,
             max_iterations or settings.max_iterations,
             merchant_id=merchant_id,
+            input_method=input_method,
+            language=language,
         )
     )
     return result  # type: ignore[return-value]
