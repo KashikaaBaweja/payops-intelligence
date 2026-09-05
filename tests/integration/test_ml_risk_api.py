@@ -7,6 +7,7 @@ from payops_core.ml.train import clear_model_cache
 
 from apps.api.deps import get_session
 from apps.api.main import create_app
+from tests.auth_helpers import authenticate_session_client
 
 
 def _client(tmp_path: Path) -> tuple[TestClient, object]:
@@ -21,7 +22,9 @@ def _client(tmp_path: Path) -> tuple[TestClient, object]:
 
     app = create_app()
     app.dependency_overrides[get_session] = override_session
-    return TestClient(app), session
+    client = TestClient(app)
+    authenticate_session_client(client, session)
+    return client, session
 
 
 def test_merchant_risk_endpoint(tmp_path: Path) -> None:

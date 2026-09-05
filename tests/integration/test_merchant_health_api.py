@@ -3,6 +3,7 @@ from payops_core.data.engine import create_schema, make_engine, session_factory
 
 from apps.api.deps import get_session
 from apps.api.main import create_app
+from tests.auth_helpers import authenticate_session_client
 from tests.health_fixtures import HEALTH_WINDOW, load_health_dataset
 
 
@@ -19,7 +20,9 @@ def _client() -> tuple[TestClient, object]:
 
     app = create_app()
     app.dependency_overrides[get_session] = override_session
-    return TestClient(app), session
+    client = TestClient(app)
+    authenticate_session_client(client, session)
+    return client, session
 
 
 def test_merchant_health_endpoint_returns_explainable_score() -> None:

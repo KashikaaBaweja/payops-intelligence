@@ -31,5 +31,9 @@ def test_alembic_upgrade_creates_payment_tables(tmp_path, monkeypatch) -> None:
         "ledger_transfers",
         "ledger_entries",
         "ledger_audit_events",
+        "auth_users",
+        "auth_sessions",
+        "password_reset_tokens",
+        "audit_events",
     }.issubset(tables)
     get_settings.cache_clear()

@@ -1,13 +1,8 @@
-import dynamic from "next/dynamic";
 import Link from "next/link";
+import { AgentOrbit } from "../../components/landing/AgentOrbitLazy";
 import { TracePipeline } from "../../components/TracePipeline";
 import { TRACE_STAGES } from "../../lib/trace";
 import type { StageId, StageState } from "../../lib/trace";
-
-const AgentOrbit = dynamic(
-  () => import("../../components/landing/AgentOrbit").then((module) => module.AgentOrbit),
-  { ssr: false, loading: () => <div className="graph-scene" aria-hidden /> },
-);
 
 const STATES = Object.fromEntries(
   TRACE_STAGES.map((stage) => [stage.id, "pending" as StageState]),

@@ -19,11 +19,11 @@ from payops_core.tools.ml_risk import score_latency, score_risk, what_if_risk
 from payops_core.tools.sql_gateway import ALLOWED_OPERATIONS, SqlToolGateway
 from sqlalchemy.orm import Session
 
-from apps.api.deps import get_session, get_store
+from apps.api.deps import get_current_user, get_session, get_store
 from apps.api.query import parse_window, require_id
 from apps.api.store import InvestigationStore
 
-router = APIRouter(tags=["merchants"])
+router = APIRouter(tags=["merchants"], dependencies=[Depends(get_current_user)])
 
 _DEFAULT_OPERATIONS: tuple[AnalyticsOperation, ...] = (
     "get_success_rate",

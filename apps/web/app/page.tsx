@@ -1,10 +1,6 @@
-import dynamic from "next/dynamic";
 import Link from "next/link";
-
-const AgentOrbit = dynamic(
-  () => import("../components/landing/AgentOrbit").then((module) => module.AgentOrbit),
-  { ssr: false, loading: () => <div className="graph-scene" aria-hidden /> },
-);
+import { AgentOrbit } from "../components/landing/AgentOrbitLazy";
+import { LandingAsk } from "../components/landing/LandingAsk";
 
 const PILLARS = [
   {
@@ -31,12 +27,15 @@ export default function LandingPage() {
           </span>
           <span>
             <strong>PayIntel AI</strong>
-            <small>Agentic payment intelligence</small>
+            <small>Your autonomous payment intelligence layer</small>
           </span>
         </Link>
         <nav className="landing-nav" aria-label="Landing">
           <Link className="btn btn-ghost" href="/architecture">
             Architecture
+          </Link>
+          <Link className="btn btn-ghost" href="/login">
+            Sign in
           </Link>
           <Link className="btn btn-primary" href="/research" style={{ width: "auto" }}>
             Start Research
@@ -46,17 +45,10 @@ export default function LandingPage() {
       <section className="hero">
         <div>
           <p className="chip idle">Deterministic graph · hashed RAG · scoped ML</p>
-          <h1>AI that researches, analyzes and validates payment intelligence.</h1>
-          <p>
-            PayIntel combines Agentic RAG, leakage-safe machine learning, and transaction
-            intelligence over a synthetic payments ledger. Agents retrieve, score, and
-            rewrite queries, then a critic checks citations before the writer publishes a
-            report. Demo mode does not call an LLM.
-          </p>
+          <h1>Ask your payment data anything.</h1>
+          <p>Your autonomous payment intelligence layer.</p>
+          <LandingAsk />
           <div className="cta-row">
-            <Link className="btn btn-primary" href="/research" style={{ width: "auto" }}>
-              Start Research
-            </Link>
             <Link className="btn btn-ghost" href="/architecture">
               Explore Architecture
             </Link>

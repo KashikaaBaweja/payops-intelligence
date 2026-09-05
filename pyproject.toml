@@ -45,6 +45,7 @@ payops-eval = "apps.eval:main"
 [tool.setuptools]
 packages = [
   "payops_core",
+  "payops_core.auth",
   "payops_core.agents",
   "payops_core.data",
   "payops_core.graph",

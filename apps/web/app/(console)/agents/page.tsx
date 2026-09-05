@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AgentGraph } from "../../../components/graph/AgentGraph";
+import { VoiceQueryBanner } from "../../../components/research/VoiceQueryBanner";
 import { TracePipeline } from "../../../components/TracePipeline";
 import { EmptyState, ErrorState, LoadingState } from "../../../components/states/PageState";
 import { getInvestigation, getTrace } from "../../../lib/api";
@@ -13,6 +14,7 @@ import { ApiError } from "../../../lib/types";
 export default function AgentsPage() {
   const [events, setEvents] = useState<TraceEvent[]>([]);
   const [question, setQuestion] = useState("");
+  const [inputMethod, setInputMethod] = useState<"text" | "voice">("text");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const { states } = useMemo(() => stageStates(events, false), [events]);
@@ -26,6 +28,7 @@ export default function AgentsPage() {
     Promise.all([getInvestigation(id), getTrace(id)])
       .then(([inv, trace]) => {
         setQuestion(inv.question);
+        setInputMethod(inv.input_method === "voice" ? "voice" : "text");
         setEvents(trace.events?.length ? trace.events : inv.report?.agent_execution_summary ?? []);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : "Trace unavailable."))
@@ -36,8 +39,8 @@ export default function AgentsPage() {
     <>
       <h1 className="page-title">Agents</h1>
       <p className="page-lead">
-        Orchestrator through Writer for the last research run. Each node shows status, tool
-        count, and the last decision — not hidden model reasoning.
+        Orchestrator through Report for the last research run. Each node shows status, tool
+        calls, duration, and the last decision — not hidden model reasoning.
       </p>
       {loading ? <LoadingState label="Loading agent trace…" /> : null}
       {error ? <ErrorState message={error} /> : null}
@@ -54,6 +57,7 @@ export default function AgentsPage() {
             <span className="hint">{question}</span>
           </div>
           <div className="panel-bd">
+            {inputMethod === "voice" ? <VoiceQueryBanner transcript={question} /> : null}
             <AgentGraph states={states} events={events} question={question} caption="Last execution" />
             <TracePipeline states={states} events={events} />
           </div>

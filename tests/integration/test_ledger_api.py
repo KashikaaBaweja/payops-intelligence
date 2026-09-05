@@ -6,6 +6,7 @@ from payops_core.data.seed import seed
 
 from apps.api.deps import get_session
 from apps.api.main import create_app
+from tests.auth_helpers import authenticate_session_client
 
 
 def _client(tmp_path: Path) -> tuple[TestClient, object]:
@@ -20,7 +21,9 @@ def _client(tmp_path: Path) -> tuple[TestClient, object]:
     app = create_app()
     app.state.engine = engine
     app.dependency_overrides[get_session] = override_session
-    return TestClient(app), session
+    client = TestClient(app)
+    authenticate_session_client(client, session)
+    return client, session
 
 
 def test_transfer_commit_and_rollback_endpoints(tmp_path: Path) -> None:

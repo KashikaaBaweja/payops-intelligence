@@ -1,9 +1,13 @@
 from payops_core.data.engine import create_schema, make_engine, session_factory
 from payops_core.data.models import (
+    AuditEvent,
+    AuthSession,
+    AuthUser,
     Dispute,
     ErrorCode,
     EvidenceIndex,
     InvestigationRun,
+    PasswordResetToken,
     LedgerAccount,
     LedgerAuditEvent,
     LedgerEntry,
@@ -20,6 +24,9 @@ from payops_core.data.seed import seed
 from payops_core.data.synthetic_generator import PLANTED_INCIDENTS, generate
 
 __all__ = [
+    "AuditEvent",
+    "AuthSession",
+    "AuthUser",
     "Dispute",
     "ErrorCode",
     "EvidenceIndex",
@@ -31,6 +38,7 @@ __all__ = [
     "Merchant",
     "Order",
     "Payment",
+    "PasswordResetToken",
     "PaymentMethod",
     "PLANTED_INCIDENTS",
     "Refund",

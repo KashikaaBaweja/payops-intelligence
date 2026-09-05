@@ -37,6 +37,11 @@ export const SAMPLE_QUESTIONS = [
     merchant_id: "M102",
   },
   {
+    label: "Hinglish transaction risk",
+    question: "Is transaction ka risk kitna hai?",
+    merchant_id: "M102",
+  },
+  {
     label: "M102 capture latency",
     question: "What is the predicted capture latency for M102?",
     merchant_id: "M102",
@@ -84,6 +89,13 @@ export function formatMetricValue(metric: MetricResult): string {
 
 export function formatPercent(value: number): string {
   return `${Math.round(value * 100)}%`;
+}
+
+export function formatDuration(ms: number | null | undefined): string {
+  if (ms == null || !Number.isFinite(ms) || ms < 0) {
+    return "—";
+  }
+  return `${(ms / 1000).toFixed(1)} sec`;
 }
 
 export function formatTime(iso: string | null | undefined): string {

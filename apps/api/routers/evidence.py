@@ -2,11 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from payops_core.models.api import ErrorResponse
 from payops_core.models.schemas import EvidenceItem
 
-from apps.api.deps import get_store
+from apps.api.deps import get_current_user, get_store
 from apps.api.query import require_id
 from apps.api.store import InvestigationStore
 
-router = APIRouter(tags=["evidence"])
+router = APIRouter(tags=["evidence"], dependencies=[Depends(get_current_user)])
 
 
 @router.get(

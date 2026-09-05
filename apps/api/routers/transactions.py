@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
+from payops_core.auth.audit import EVENT_TRANSACTION_ANALYZED, record_audit
+from payops_core.data.models import AuthUser
 from payops_core.ledger.isolation import isolation_for
 from payops_core.ledger.transfer import (
     account_views,
@@ -10,10 +12,10 @@ from payops_core.models.schemas import LedgerAccountsResponse, TransferRequest, 
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from apps.api.deps import get_engine, get_session
+from apps.api.deps import get_current_user, get_engine, get_session
 from apps.api.query import require_id
 
-router = APIRouter(tags=["transactions"])
+router = APIRouter(tags=["transactions"], dependencies=[Depends(get_current_user)])
 
 
 @router.get(
@@ -70,9 +72,11 @@ def fetch_transfer(id: str, engine: Engine = Depends(get_engine)) -> TransferRes
 def create_transfer(
     payload: TransferRequest,
     engine: Engine = Depends(get_engine),
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(get_current_user),
 ) -> TransferResult:
     try:
-        return run_ledger_transfer(
+        result = run_ledger_transfer(
             engine,
             from_account_id=payload.from_account_id,
             to_account_id=payload.to_account_id,
@@ -81,3 +85,12 @@ def create_transfer(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    record_audit(
+        session,
+        EVENT_TRANSACTION_ANALYZED,
+        actor_id=user.user_id,
+        resource_id=result.transfer_id,
+        metadata={"status": result.status, "amount_cents": result.amount_cents},
+        commit=True,
+    )
+    return result

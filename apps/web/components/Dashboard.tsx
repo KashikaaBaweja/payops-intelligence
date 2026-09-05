@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createInvestigation,
+  deleteAllInvestigations,
+  deleteInvestigation,
   getApiHealth,
   getEvidence,
   getMerchantHealth,
@@ -10,6 +12,7 @@ import {
   getMerchantRegression,
   getMerchantRisk,
   getTrace,
+  listInvestigations,
   postRiskWhatIf,
 } from "../lib/api";
 import {
@@ -31,6 +34,7 @@ import type {
   EvidenceItem,
   IncidentReport,
   InvestigationResponse,
+  InvestigationSummary,
   MerchantHealthScore,
   MerchantMetricsResponse,
   MerchantRiskScore,
@@ -39,16 +43,33 @@ import type {
   RiskWhatIfScore,
   TraceEvent,
 } from "../lib/types";
-import { rememberInvestigation } from "../lib/session";
+import { forgetInvestigation, rememberInvestigation } from "../lib/session";
 import { stageLabel, stageStates } from "../lib/trace";
+import { OriginalQueryCard } from "./research/OriginalQueryCard";
+import { QueryHistory, type QueryHistoryItem } from "./research/QueryHistory";
+import { VoiceQueryButton } from "./research/VoiceQueryButton";
+import { LANGUAGE_OPTIONS, speechRecognitionLang, type LanguageChoice } from "../lib/queryLanguage";
+import { buildResearchRequest, type InputMethod } from "../lib/queryInput";
 
 type ViewState = "idle" | "running" | "ready" | "failed";
 
-export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
+const autoRunOnce = new Set<string>();
+
+export function Dashboard({
+  initialQuestion,
+  initialInputMethod = "text",
+  autoRun = false,
+}: {
+  initialQuestion?: string;
+  initialInputMethod?: InputMethod;
+  autoRun?: boolean;
+}) {
   const [question, setQuestion] = useState<string>(
     initialQuestion || SAMPLE_QUESTIONS[0].question,
   );
-  const [merchantId, setMerchantId] = useState<string>("M102");
+  const [merchantId, setMerchantId] = useState<string>(
+    merchantFromQuestion(initialQuestion || "") || "M102",
+  );
   const [view, setView] = useState<ViewState>("idle");
   const [error, setError] = useState<{ message: string; requestId?: string } | null>(null);
   const [investigation, setInvestigation] = useState<InvestigationResponse | null>(null);
@@ -64,6 +85,16 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
   const [whatIfBusy, setWhatIfBusy] = useState(false);
   const [apiOk, setApiOk] = useState<boolean | null>(null);
   const [environment, setEnvironment] = useState("local");
+  const [inputMethod, setInputMethod] = useState<InputMethod>(initialInputMethod);
+  const [language, setLanguage] = useState<LanguageChoice>("auto");
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const [submittedRun, setSubmittedRun] = useState<{
+    query: string;
+    input_method: InputMethod;
+    query_language?: string;
+  } | null>(null);
+  const [history, setHistory] = useState<QueryHistoryItem[]>([]);
+  const [historyBusy, setHistoryBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +119,24 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    listInvestigations()
+      .then((body) => {
+        if (!cancelled) {
+          setHistory(body.items.map(toHistoryItem));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHistory([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const report: IncidentReport | null = investigation?.report ?? null;
   const { states, current } = useMemo(
     () => stageStates(events, view === "running"),
@@ -95,10 +144,24 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
   );
 
   async function runInvestigation() {
-    const trimmed = question.trim();
-    if (trimmed.length < 3) {
+    const body = buildResearchRequest(question, inputMethod, merchantId || null, 3, language);
+    if (!body) {
       setError({ message: "Enter an investigation question (at least 3 characters)." });
       return;
+    }
+    setSubmittedRun({
+      query: body.query,
+      input_method: body.input_method,
+      query_language: body.language === "auto" ? undefined : body.language,
+    });
+    if (body.input_method === "voice") {
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.requestAnimationFrame(() => {
+        document.getElementById("agent-execution")?.scrollIntoView({
+          block: "start",
+          behavior: reduce ? "auto" : "smooth",
+        });
+      });
     }
     setView("running");
     setError(null);
@@ -111,12 +174,14 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
     setRegression(null);
     setWhatIf(null);
     try {
-      const created = await createInvestigation({
-        question: trimmed,
-        merchant_id: merchantId || null,
-      });
+      const created = await createInvestigation(body);
       rememberInvestigation(created.investigation_id);
       setInvestigation(created);
+      setSubmittedRun({
+        query: created.question || created.original_query || body.query,
+        input_method: created.input_method || body.input_method,
+        query_language: created.query_language,
+      });
       const trace = created.investigation_id
         ? await getTrace(created.investigation_id).catch(() => ({
             events: created.report?.agent_execution_summary ?? [],
@@ -143,7 +208,7 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
         }),
       );
       setEvidence(loaded);
-      const merchant = created.report?.merchant_id || merchantId || merchantFromQuestion(trimmed);
+      const merchant = created.report?.merchant_id || merchantId || merchantFromQuestion(body.query);
       const reportMetrics = created.report?.observed_metrics ?? [];
       setMetrics(reportMetrics);
       const runEvents = trace.events?.length
@@ -168,6 +233,10 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
         }
       }
       setView(created.status === "failed" ? "failed" : "ready");
+      const listed = await listInvestigations().catch(() => null);
+      if (listed) {
+        setHistory(listed.items.map(toHistoryItem));
+      }
     } catch (err) {
       const apiError = err instanceof ApiError ? err : null;
       setView("failed");
@@ -179,6 +248,20 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
       });
     }
   }
+
+  const runRef = useRef(runInvestigation);
+  runRef.current = runInvestigation;
+  useEffect(() => {
+    if (!autoRun || !initialQuestion) {
+      return;
+    }
+    const key = `${initialInputMethod}:${initialQuestion}`;
+    if (autoRunOnce.has(key)) {
+      return;
+    }
+    autoRunOnce.add(key);
+    void runRef.current();
+  }, [autoRun, initialQuestion, initialInputMethod]);
 
   const statusChip = statusFor(view, report);
 
@@ -195,13 +278,40 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
       <section className="panel research-composer">
         <div className="panel-hd">Query</div>
         <div className="panel-bd">
+          <div className="field">
+            <label htmlFor="research-question">Research question</label>
+            <div className="query-input-wrap">
+              <textarea
+                id="research-question"
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                disabled={view === "running"}
+              />
+              <VoiceQueryButton
+                disabled={view === "running"}
+                value={question}
+                speechLang={speechRecognitionLang(language, question)}
+                onChange={setQuestion}
+                onError={(message) => setError({ message })}
+                onClearError={() => setError(null)}
+                onVoiceOrigin={() => setInputMethod("voice")}
+                onBusyChange={setVoiceBusy}
+              />
+            </div>
+          </div>
           <label className="field">
-            Research question
-            <textarea
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
+            Query language
+            <select
+              value={language}
               disabled={view === "running"}
-            />
+              onChange={(event) => setLanguage(event.target.value as LanguageChoice)}
+            >
+              {LANGUAGE_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="field">
             Merchant
@@ -218,7 +328,11 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
               ))}
             </select>
           </label>
-          <button className="btn btn-primary" disabled={view === "running"} onClick={runInvestigation}>
+          <button
+            className="btn btn-primary"
+            disabled={view === "running" || voiceBusy}
+            onClick={runInvestigation}
+          >
             {view === "running" ? "Running…" : "Run investigation"}
           </button>
           <div className="samples" style={{ marginTop: 12 }}>
@@ -231,6 +345,7 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
                 onClick={() => {
                   setQuestion(sample.question);
                   setMerchantId(sample.merchant_id ?? "");
+                  setInputMethod("text");
                 }}
               >
                 {sample.label}
@@ -248,7 +363,13 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
             <span className={`chip ${statusChip.tone}`}>{statusChip.label}</span>
             <dl className="kv" style={{ marginTop: 10 }}>
               <dt>Step</dt>
-              <dd>{view === "idle" ? "Idle" : stageLabel(current)}</dd>
+              <dd>
+                {view === "idle"
+                  ? "Idle"
+                  : view === "running" && !current
+                    ? "Waiting"
+                    : stageLabel(current)}
+              </dd>
               <dt>Case</dt>
               <dd className="mono">
                 {investigation?.investigation_id
@@ -284,28 +405,80 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
             </div>
           ) : null}
 
+          <QueryHistory
+            items={visibleHistory(history, view, submittedRun)}
+            busy={historyBusy || view === "running"}
+            onDelete={async (id) => {
+              setHistoryBusy(true);
+              try {
+                await deleteInvestigation(id);
+                forgetInvestigation(id);
+                setHistory((current) => current.filter((item) => item.investigation_id !== id));
+              } catch (err) {
+                setError({
+                  message: err instanceof ApiError ? err.message : "Could not delete that query.",
+                  requestId: err instanceof ApiError ? err.requestId : undefined,
+                });
+              } finally {
+                setHistoryBusy(false);
+              }
+            }}
+            onClear={async () => {
+              setHistoryBusy(true);
+              try {
+                await deleteAllInvestigations();
+                forgetInvestigation();
+                setHistory([]);
+              } catch (err) {
+                setError({
+                  message: err instanceof ApiError ? err.message : "Could not clear query history.",
+                  requestId: err instanceof ApiError ? err.requestId : undefined,
+                });
+              } finally {
+                setHistoryBusy(false);
+              }
+            }}
+          />
+
           <section className="panel">
             <div className="panel-hd">Research plan</div>
             <div className="panel-bd">
               {view === "running" ? (
-                <div className="loading-box">Orchestrator is allocating catalog tools…</div>
+                <div className="loading-box">
+                  Waiting for planner events from the investigation graph.
+                </div>
               ) : (
-                <ResearchPlan events={events} question={question} />
+                <ResearchPlan events={events} question={submittedRun?.query ?? question} />
               )}
             </div>
           </section>
 
-          <section className="panel">
+          <section className="panel" id="agent-execution">
             <div className="panel-hd">
               Agent status
-              <span className="hint">Orchestrator → Writer · nodes light as the graph runs</span>
+              <span className="hint">
+                Nodes update from investigation trace events only — no simulated progress
+              </span>
             </div>
             <div className="panel-bd">
+              {submittedRun ? (
+                <OriginalQueryCard
+                  transcript={submittedRun.query}
+                  queryLanguage={investigation?.query_language || submittedRun.query_language}
+                  inputMethod={submittedRun.input_method}
+                />
+              ) : null}
               <AgentGraph
                 states={states}
                 events={events}
-                question={question}
-                caption={view === "running" ? "Research running" : "Agent architecture"}
+                question={submittedRun?.query ?? question}
+                caption={
+                  view === "running"
+                    ? "Waiting for execution events"
+                    : events.length
+                      ? "Agent execution"
+                      : "Agent architecture"
+                }
               />
               <TracePipeline states={states} events={events} />
             </div>
@@ -318,7 +491,9 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
             </div>
             <div className="panel-bd" style={{ padding: 0 }}>
               {view === "running" ? (
-                <div className="loading-box">Orchestrator running. Trace events appear when the graph finishes.</div>
+                <div className="loading-box">
+                  Trace events appear when the graph publishes them. Nodes stay waiting until then.
+                </div>
               ) : events.length === 0 ? (
                 <div className="empty">No execution events yet. Run an investigation to populate the timeline.</div>
               ) : (
@@ -369,7 +544,7 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
           </section>
 
           <div className="grid-2">
-            <section className="panel">
+            <section className="panel" id="research-evidence">
               <div className="panel-hd">Evidence</div>
               <div className="panel-bd">
                 <EvidenceList
@@ -438,7 +613,7 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
                 )}
               </div>
             </section>
-            <section className="panel">
+            <section className="panel" id="research-confidence">
               <div className="panel-hd">Confidence</div>
               <div className="panel-bd">
                 {view === "running" ? (
@@ -523,7 +698,7 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
             </div>
           </section>
 
-          <section className="panel">
+          <section className="panel" id="research-ml">
             <div className="panel-hd">
               Failure classifier
               <span className="hint">Classification only — not a fraud decision</span>
@@ -685,9 +860,11 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
             </div>
           </section>
 
-          <LedgerPanel />
+          <div id="research-transactions">
+            <LedgerPanel />
+          </div>
 
-          <section className="panel">
+          <section className="panel" id="research-report">
             <div className="panel-hd">Final investigation report</div>
             <div className="panel-bd">
               {view === "running" ? (
@@ -697,6 +874,9 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
               ) : (
                 <>
                   <h2 className="h1">{report.executive_summary}</h2>
+                  <a className="btn btn-ghost" href="#why-this-result" style={{ width: "auto", margin: "12px 0" }}>
+                    Why this result?
+                  </a>
                   <dl className="kv">
                     <dt>Merchant</dt>
                     <dd>{report.merchant_id ?? "—"}</dd>
@@ -725,7 +905,55 @@ export function Dashboard({ initialQuestion }: { initialQuestion?: string }) {
             </div>
           </section>
 
-          <section className="panel">
+          <section className="panel" id="why-this-result">
+            <div className="panel-hd">Why this result?</div>
+            <div className="panel-bd">
+              {!report ? (
+                <div className="empty">
+                  The writer has not published a report yet. This section cites the same
+                  evidence, tools, and confidence the graph actually produced.
+                </div>
+              ) : (
+                <>
+                  <p>{report.likely_cause.cause}</p>
+                  <dl className="kv">
+                    <dt>Confidence</dt>
+                    <dd className="mono">{formatPercent(report.confidence)}</dd>
+                    <dt>Evidence</dt>
+                    <dd>
+                      {report.evidence_sufficient ? "Sufficient" : "Insufficient"} ·{" "}
+                      {report.evidence.length} citations
+                    </dd>
+                    <dt>Retrieval</dt>
+                    <dd>
+                      {report.retrieval
+                        ? `${report.retrieval.iterations} rounds · ${report.retrieval.sufficient ? "enough sources" : "not enough sources"}`
+                        : "No retrieval summary"}
+                    </dd>
+                  </dl>
+                  <div className="cta-row" style={{ marginTop: 12 }}>
+                    <a className="btn btn-ghost" href="#research-evidence">
+                      Evidence
+                    </a>
+                    <a className="btn btn-ghost" href="#research-ml">
+                      ML Analysis
+                    </a>
+                    <a className="btn btn-ghost" href="#research-transactions">
+                      Transaction Analysis
+                    </a>
+                    <a className="btn btn-ghost" href="#research-confidence">
+                      Confidence
+                    </a>
+                    <a className="btn btn-ghost" href="#research-sources">
+                      Sources
+                    </a>
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+
+          <section className="panel" id="research-sources">
             <div className="panel-hd">Source references</div>
             <div className="panel-bd" style={{ padding: 0 }}>
               {view === "running" ? (
@@ -777,6 +1005,38 @@ function statusFor(
     return { label: "Completed · insufficient evidence", tone: "warn" };
   }
   return { label: "Completed", tone: "ok" };
+}
+
+function toHistoryItem(item: InvestigationSummary): QueryHistoryItem {
+  return {
+    investigation_id: item.investigation_id,
+    question: item.question,
+    input_method: item.input_method === "voice" ? "voice" : "text",
+    status: item.status,
+    created_at: item.created_at,
+    duration_ms: item.duration_ms ?? null,
+  };
+}
+
+function visibleHistory(
+  history: QueryHistoryItem[],
+  view: ViewState,
+  submitted: { query: string; input_method: InputMethod } | null,
+): QueryHistoryItem[] {
+  if (view !== "running" || !submitted) {
+    return history;
+  }
+  return [
+    {
+      investigation_id: "pending",
+      question: submitted.query,
+      input_method: submitted.input_method,
+      status: "running",
+      created_at: new Date().toISOString(),
+      duration_ms: null,
+    },
+    ...history,
+  ];
 }
 
 function usedMlTask(events: TraceEvent[], tools: string[], decisions: string[]): boolean {

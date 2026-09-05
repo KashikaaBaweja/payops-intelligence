@@ -96,44 +96,24 @@ function clock(iso: string | undefined): string {
   return parsed.toISOString().slice(11, 19);
 }
 
-function detailFor(event: TraceEvent, stage: StageId | null): string {
-  if (event.search_query && (stage === "researcher" || stage === "rag")) {
-    if (event.action.includes("rewrite") || event.decision === "rewrite") {
-      return "Rewriting query";
-    }
-    const count = event.evidence_ids.length;
-    if (count) {
-      return `${count} document${count === 1 ? "" : "s"} retrieved`;
-    }
-    return `Searching ${event.search_query}`;
+function detailFor(event: TraceEvent): string {
+  const parts: string[] = [];
+  if (event.decision) {
+    parts.push(event.decision);
   }
-  if (stage === "planner") {
-    return event.decision || "Classified as research + analytics task";
+  if (event.action && event.action !== event.decision) {
+    parts.push(event.action.replaceAll("_", " "));
   }
-  if (stage === "rag" && (event.decision === "rewrite" || event.action.includes("insufficient"))) {
-    return "Evidence insufficient";
+  if (event.tool) {
+    parts.push(event.tool);
   }
-  if (stage === "analyst") {
-    return "Dataset analyzed";
+  if (event.search_query) {
+    parts.push(event.search_query);
   }
-  if (stage === "risk") {
-    if (event.tool === "ml_regression" || event.decision === "score_regression") {
-      return "Regression model selected";
-    }
-    return "Classification model selected";
+  if (event.evidence_ids.length) {
+    parts.push(`${event.evidence_ids.length} evidence`);
   }
-  if (stage === "integrity") {
-    return "Transaction consistency verified";
-  }
-  if (stage === "critic") {
-    return event.verification_status === "passed" || event.decision === "accept"
-      ? "Findings verified"
-      : event.decision || "Findings reviewed";
-  }
-  if (stage === "writer") {
-    return "Final report generated";
-  }
-  return event.decision || event.action.replaceAll("_", " ");
+  return parts.join(" · ") || event.node;
 }
 
 export function linesFromTrace(events: TraceEvent[], question?: string): RunLogLine[] {
@@ -155,7 +135,7 @@ export function linesFromTrace(events: TraceEvent[], question?: string): RunLogL
     lines.push({
       at: clock(event.timestamp),
       agent: evidence && stage === "rag" ? "Evidence evaluator" : stageLabel(stage),
-      detail: detailFor(event, stage),
+      detail: detailFor(event),
       node: evidence && stage === "rag" ? "evidence" : stage ?? "query",
     });
   }

@@ -4,11 +4,13 @@ import pytest
 from fastapi.testclient import TestClient
 from payops_core.data.engine import make_engine
 from payops_core.data.seed import seed
+from payops_core.models.schemas import TimeWindow, evidence_scope
 from payops_core.rag.ingest import ingest_corpus
 from payops_core.rag.retriever import DocumentRetriever
 from payops_core.rag.vector_store import InMemoryVectorStore
 
 from apps.api.main import create_app
+from tests.auth_helpers import authenticate_client
 from tests.health_fixtures import HEALTH_WINDOW
 
 CORPUS = Path(__file__).resolve().parents[2] / "docs" / "corpus"
@@ -25,6 +27,7 @@ def api_client(tmp_path_factory):
     app.state.engine = engine
     app.state.retriever = DocumentRetriever(store)
     with TestClient(app) as client:
+        authenticate_client(client, engine)
         yield client
 
 
@@ -48,11 +51,16 @@ def test_openapi_documents_required_paths(api_client) -> None:
         "/transactions/transfers",
         "/health",
         "/health/ready",
+        "/auth/login",
+        "/auth/signup",
+        "/admin/overview",
     ):
         assert path in paths
     post = paths["/investigations"]["post"]
     assert "InvestigationCreateRequest" in str(schema["components"]["schemas"])
     assert post["responses"]["201"]
+    assert "delete" in paths["/investigations"]
+    assert "delete" in paths["/investigations/{id}"]
 
 
 def test_request_id_is_echoed(api_client) -> None:
@@ -156,7 +164,8 @@ def test_merchant_metrics_and_health(api_client) -> None:
     assert body["metrics"]
     names = {item["metric"] for item in body["metrics"]}
     assert "success_rate" in names
-    evidence_id = "metric-get_success_rate-M102"
+    window = TimeWindow(start=HEALTH_WINDOW.start, end=HEALTH_WINDOW.end)
+    evidence_id = f"metric-get_success_rate-{evidence_scope('M102', window)}"
     evidence = api_client.get(f"/evidence/{evidence_id}")
     assert evidence.status_code == 200
 

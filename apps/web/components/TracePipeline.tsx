@@ -1,6 +1,6 @@
 "use client";
 
-import { TRACE_STAGES, stageMetrics, type StageState } from "../lib/trace";
+import { TRACE_STAGES, stageMetrics, stageStatusLabel, type StageState } from "../lib/trace";
 import type { TraceEvent } from "../lib/types";
 
 export function TracePipeline({
@@ -15,6 +15,7 @@ export function TracePipeline({
       {TRACE_STAGES.map((stage, index) => {
         const metrics = stageMetrics(events, stage.id);
         const state = states[stage.id] ?? "pending";
+        const status = stageStatusLabel(state);
         return (
           <li key={stage.id} className={`stage ${state}`}>
             {index > 0 ? (
@@ -22,12 +23,14 @@ export function TracePipeline({
                 ↓
               </span>
             ) : null}
-            <div className="stage-name">{stage.label}</div>
-            <div className="stage-state">{state}</div>
+            <div className="stage-head">
+              <div className="stage-name">{stage.label}</div>
+              <div className="stage-state">{status}</div>
+            </div>
             <dl className="stage-metrics">
               <div>
                 <dt>Status</dt>
-                <dd>{state}</dd>
+                <dd>{status}</dd>
               </div>
               <div>
                 <dt>Duration</dt>
@@ -36,12 +39,14 @@ export function TracePipeline({
                 </dd>
               </div>
               <div>
-                <dt>Tools</dt>
-                <dd className="mono">{metrics.tools}</dd>
+                <dt>Tool calls</dt>
+                <dd className="mono">
+                  {metrics.toolNames.length ? metrics.toolNames.join(", ") : "—"}
+                </dd>
               </div>
               <div>
-                <dt>Events</dt>
-                <dd className="mono">{metrics.events}</dd>
+                <dt>Result</dt>
+                <dd>{metrics.summary}</dd>
               </div>
             </dl>
             <div className="stage-summary">{metrics.summary}</div>

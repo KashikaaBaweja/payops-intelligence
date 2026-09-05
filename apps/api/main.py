@@ -18,6 +18,7 @@ from payops_core.logging import configure_logging
 from payops_core.models.api import ErrorResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from apps.api.auth_service import bootstrap_admin
 from apps.api.deps import build_startup_retriever
 from apps.api.errors import (
     http_exception_handler,
@@ -25,6 +26,8 @@ from apps.api.errors import (
     validation_exception_handler,
 )
 from apps.api.middleware import RequestIdMiddleware
+from apps.api.routers.admin import router as admin_router
+from apps.api.routers.auth import router as auth_router
 from apps.api.routers.documents import router as documents_router
 from apps.api.routers.evidence import router as evidence_router
 from apps.api.routers.health import router as health_router
@@ -41,6 +44,8 @@ _TAGS = [
     {"name": "evidence", "description": "Resolve cited evidence items"},
     {"name": "transactions", "description": "Live ledger debit/credit with commit or rollback"},
     {"name": "documents", "description": "Research corpus on disk"},
+    {"name": "auth", "description": "Signup, login, session, and password reset"},
+    {"name": "admin", "description": "Administrator console. ADMIN role required."},
 ]
 
 
@@ -50,6 +55,21 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     configure_logging(settings.log_level, json_logs=settings.json_logs)
     if getattr(application.state, "retriever", None) is None:
         application.state.retriever = build_startup_retriever()
+    try:
+        from payops_core.data.engine import session_factory
+
+        engine = getattr(application.state, "engine", None)
+        if engine is None:
+            from payops_core.data.engine import make_engine
+
+            engine = make_engine()
+            application.state.engine = engine
+        factory = session_factory(engine)
+        with factory() as session:
+            bootstrap_admin(session, settings)
+            session.commit()
+    except Exception:
+        logger.warning("bootstrap_admin_skipped")
     logger.info("api_starting environment=%s", settings.environment)
     yield
     logger.info("api_stopping")
@@ -69,6 +89,8 @@ def create_app() -> FastAPI:
         openapi_tags=_TAGS,
         responses={
             400: {"model": ErrorResponse},
+            401: {"model": ErrorResponse},
+            403: {"model": ErrorResponse},
             404: {"model": ErrorResponse},
             422: {"model": ErrorResponse},
             500: {"model": ErrorResponse},
@@ -86,6 +108,8 @@ def create_app() -> FastAPI:
     application.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
     application.add_exception_handler(Exception, unhandled_exception_handler)
     application.include_router(health_router)
+    application.include_router(auth_router)
+    application.include_router(admin_router)
     application.include_router(investigations_router)
     application.include_router(merchants_router)
     application.include_router(evidence_router)

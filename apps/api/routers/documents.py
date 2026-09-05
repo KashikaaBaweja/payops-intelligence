@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends
 from payops_core.config import Settings
 from payops_core.models.api import CorpusDocument, CorpusResponse
 
-from apps.api.deps import get_app_settings
+from apps.api.deps import get_app_settings, get_current_user
 
-router = APIRouter(tags=["documents"])
+router = APIRouter(tags=["documents"], dependencies=[Depends(get_current_user)])
 
 
 @router.get(

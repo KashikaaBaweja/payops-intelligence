@@ -32,10 +32,31 @@ class Settings(BaseSettings):
     auto_migrate: bool = False
     seed_on_start: bool = False
     db_wait_seconds: float = 60.0
+    session_ttl_hours: int = 72
+    cookie_name: str = "payintel_session"
+    cookie_secure: bool = False
+    password_min_length: int = 10
+    bootstrap_admin_email: str = ""
+    bootstrap_admin_password: str = ""
+    bootstrap_admin_name: str = "PayIntel Admin"
+    public_app_url: str = "http://localhost:3001"
+    reset_token_ttl_minutes: int = 60
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_use_tls: bool = True
 
     @property
     def cors_origin_list(self) -> list[str]:
         return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
+
+    @property
+    def session_cookie_secure(self) -> bool:
+        if self.cookie_secure:
+            return True
+        return self.environment not in {"local", "test"}
 
 
 @lru_cache

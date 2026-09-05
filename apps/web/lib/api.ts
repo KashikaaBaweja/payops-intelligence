@@ -35,13 +35,14 @@ function isJsonResponse(response: Response): boolean {
   return (response.headers.get("content-type") || "").includes("application/json");
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const requestId = crypto.randomUUID();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 60_000);
   try {
     const response = await fetch(`${BASE}${path}`, {
       ...init,
+      credentials: "include",
       signal: controller.signal,
       headers: {
         Accept: "application/json",
@@ -61,12 +62,24 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       } catch {
         body = {};
       }
+      if (
+        response.status === 401 &&
+        typeof window !== "undefined" &&
+        !path.startsWith("/auth/") &&
+        !path.startsWith("/health")
+      ) {
+        const next = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
+        window.location.assign(`/login?next=${next}`);
+      }
       throw new ApiError(
         detailMessage(body.detail) || response.statusText,
         response.status,
         body.request_id || echoed,
         body.error || "http_error",
       );
+    }
+    if (response.status === 204) {
+      return undefined as T;
     }
     if (!isJsonResponse(response)) {
       throw new ApiError(API_DOWN, 503, echoed, "network_error");
@@ -86,10 +99,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function createInvestigation(payload: {
-  question: string;
+  query: string;
+  input_method: "text" | "voice";
+  language?: "auto" | "en" | "hi" | "hi-latn";
   merchant_id?: string | null;
+  max_iterations?: number;
 }): Promise<InvestigationResponse> {
-  const body: Record<string, unknown> = { question: payload.question, max_iterations: 3 };
+  const body: Record<string, unknown> = {
+    query: payload.query,
+    input_method: payload.input_method,
+    max_iterations: payload.max_iterations ?? 3,
+  };
+  if (payload.language && payload.language !== "auto") {
+    body.language = payload.language;
+  }
   if (payload.merchant_id) {
     body.merchant_id = payload.merchant_id;
   }
@@ -152,6 +175,14 @@ export function getSystemHealth(): Promise<SystemHealthResponse> {
 
 export function listInvestigations(): Promise<InvestigationListResponse> {
   return request("/investigations");
+}
+
+export function deleteInvestigation(id: string): Promise<void> {
+  return request(`/investigations/${id}`, { method: "DELETE" });
+}
+
+export function deleteAllInvestigations(): Promise<{ deleted: number }> {
+  return request("/investigations", { method: "DELETE" });
 }
 
 export function listDocuments(): Promise<CorpusResponse> {

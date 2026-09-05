@@ -356,13 +356,92 @@ class InvestigationRun(Base):
 
     investigation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     question: Mapped[str] = mapped_column(Text, nullable=False)
+    input_method: Mapped[str] = mapped_column(String(8), nullable=False, default="text")
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     merchant_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     report_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     trace_json: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+
+class AuthUser(Base):
+    """Console operator. Passwords are stored as scrypt hashes only."""
+
+    __tablename__ = "auth_users"
+    __table_args__ = (
+        CheckConstraint("role IN ('user', 'admin')", name="ck_auth_users_role"),
+        CheckConstraint("status IN ('active', 'suspended')", name="ck_auth_users_status"),
+        Index("ix_auth_users_email", "email", unique=True),
+        Index("ix_auth_users_role_status", "role", "status"),
+    )
+
+    user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    email: Mapped[str] = mapped_column(String(254), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default="user")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    last_active_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class AuthSession(Base):
+    """Server-side session. The cookie holds the raw token; only the hash is stored."""
+
+    __tablename__ = "auth_sessions"
+    __table_args__ = (
+        Index("ix_auth_sessions_token_hash", "token_hash", unique=True),
+        Index("ix_auth_sessions_user", "user_id"),
+    )
+
+    session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("auth_users.user_id", ondelete="CASCADE"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(240), nullable=True)
+
+
+class PasswordResetToken(Base):
+    """One-time password reset. The emailed token is never stored in plaintext."""
+
+    __tablename__ = "password_reset_tokens"
+    __table_args__ = (Index("ix_password_reset_token_hash", "token_hash", unique=True),)
+
+    token_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("auth_users.user_id", ondelete="CASCADE"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class AuditEvent(Base):
+    """Security-sensitive actions. Never store passwords, tokens, or secrets."""
+
+    __tablename__ = "audit_events"
+    __table_args__ = (
+        Index("ix_audit_events_timestamp", "created_at"),
+        Index("ix_audit_events_actor", "actor_id"),
+        Index("ix_audit_events_type", "event_type"),
+    )
+
+    event_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    actor_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    resource_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class EvidenceIndex(Base):

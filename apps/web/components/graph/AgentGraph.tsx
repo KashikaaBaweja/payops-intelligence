@@ -81,6 +81,10 @@ function graphStates(
       next[node.id] = stages?.risk ?? "pending";
       continue;
     }
+    if (node.id === "query") {
+      next[node.id] = "pending";
+      continue;
+    }
     next[node.id] = stages?.[node.id] ?? "pending";
   }
   return next;
@@ -259,11 +263,11 @@ export function AgentGraph({
     return () => window.clearInterval(timer);
   }, [demo, reduce, lines.length]);
 
-  const lighting = useMemo(() => lightingFromLines(lines, cursor), [lines, cursor]);
-  const graph = useMemo(
-    () => graphStates(states, demo || lines.length ? lighting : null),
-    [states, demo, lines.length, lighting],
+  const lighting = useMemo(
+    () => (demo ? lightingFromLines(lines, cursor) : null),
+    [demo, lines, cursor],
   );
+  const graph = useMemo(() => graphStates(states, lighting), [states, lighting]);
   const current = lines[Math.max(0, cursor - 1)];
   const title = demo ? current?.agent || "Research running" : caption || "Agent architecture";
   const path = current ? `${current.agent} → ${current.detail}` : "Idle";

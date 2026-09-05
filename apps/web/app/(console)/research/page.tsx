@@ -7,7 +7,15 @@ import { LoadingState } from "../../../components/states/PageState";
 
 function ResearchInner() {
   const params = useSearchParams();
-  return <Dashboard initialQuestion={params.get("q") ?? undefined} />;
+  const question = params.get("q") ?? undefined;
+  const input = params.get("input") === "voice" ? "voice" : "text";
+  return (
+    <Dashboard
+      initialQuestion={question}
+      initialInputMethod={input}
+      autoRun={params.get("run") === "1" && Boolean(question)}
+    />
+  );
 }
 
 export default function ResearchPage() {

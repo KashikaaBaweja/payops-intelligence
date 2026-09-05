@@ -108,6 +108,9 @@ export type InvestigationSummary = {
   merchant_id: string | null;
   confidence: number | null;
   evidence_sufficient: boolean | null;
+  input_method?: "text" | "voice";
+  duration_ms?: number | null;
+  query_language?: "en" | "hi" | "hi-latn";
 };
 
 export type InvestigationListResponse = {
@@ -144,9 +147,15 @@ export type InvestigationResponse = {
   investigation_id: string;
   status: "completed" | "failed";
   question: string;
+  original_query?: string | null;
+  input_method?: "text" | "voice";
+  query_language?: "en" | "hi" | "hi-latn";
+  response_language?: "en" | "hi" | "hi-latn";
+  retrieval_query?: string | null;
   created_at: string;
   report: IncidentReport | null;
   error: string | null;
+  duration_ms?: number | null;
 };
 
 export type InvestigationTraceResponse = {

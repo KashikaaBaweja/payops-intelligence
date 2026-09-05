@@ -10,6 +10,9 @@ def test_default_settings(monkeypatch) -> None:
     assert settings.auto_migrate is False
     assert settings.seed_on_start is False
     assert settings.db_wait_seconds == 60.0
+    assert settings.session_ttl_hours == 72
+    assert settings.cookie_name == "payintel_session"
+    assert settings.password_min_length == 10
     assert settings.cors_origin_list == [
         "http://localhost:3000",
         "http://localhost:3001",

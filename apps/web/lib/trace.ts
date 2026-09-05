@@ -8,7 +8,7 @@ export const TRACE_STAGES = [
   { id: "risk", label: "ML Agent" },
   { id: "integrity", label: "Transaction Agent" },
   { id: "critic", label: "Critic" },
-  { id: "writer", label: "Writer" },
+  { id: "writer", label: "Report" },
 ] as const;
 
 export type StageId = (typeof TRACE_STAGES)[number]["id"];
@@ -70,19 +70,15 @@ export function stageStates(
   for (const stage of TRACE_STAGES) {
     if (seen.has(stage.id)) {
       states[stage.id] = running && stage.id === last ? "active" : "complete";
-    } else if (running && stage.id === "planner" && seen.size === 0) {
-      states[stage.id] = "active";
-    } else if (running) {
+    } else if (running || seen.size === 0) {
       states[stage.id] = "pending";
-    } else if (seen.size > 0) {
-      states[stage.id] = "skipped";
     } else {
-      states[stage.id] = "pending";
+      states[stage.id] = "skipped";
     }
   }
   let current: StageId | null = null;
   if (running) {
-    current = last ?? "planner";
+    current = last;
   } else if (seen.has("writer")) {
     current = "writer";
   } else {
@@ -104,9 +100,23 @@ export function stageMetrics(events: TraceEvent[], id: StageId) {
   return {
     events: matched.length,
     tools: tools.size,
+    toolNames: [...tools],
     durationMs,
-    summary: last?.decision || last?.action || "idle",
+    summary: last?.decision || last?.action || (matched.length ? "done" : "—"),
   };
+}
+
+export function stageStatusLabel(state: StageState): string {
+  if (state === "complete") {
+    return "✓";
+  }
+  if (state === "active") {
+    return "running";
+  }
+  if (state === "skipped") {
+    return "skipped";
+  }
+  return "waiting";
 }
 
 export function stageLabel(id: StageId | null): string {

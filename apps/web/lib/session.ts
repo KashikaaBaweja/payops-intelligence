@@ -13,3 +13,12 @@ export function lastInvestigationId(): string | null {
   }
   return window.localStorage.getItem(KEY);
 }
+
+export function forgetInvestigation(id?: string | null): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  if (!id || window.localStorage.getItem(KEY) === id) {
+    window.localStorage.removeItem(KEY);
+  }
+}

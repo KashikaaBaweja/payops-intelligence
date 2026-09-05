@@ -7,6 +7,8 @@ import { useEffect, useMemo, useState } from "react";
 import { getApiHealth, listInvestigations } from "../../lib/api";
 import { NAV } from "../../lib/nav";
 import { SAMPLE_QUESTIONS } from "../../lib/format";
+import { useAuth } from "../auth/AuthProvider";
+import { ProfileMenu } from "./ProfileMenu";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -17,6 +19,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [apiOk, setApiOk] = useState<boolean | null>(null);
   const [environment, setEnvironment] = useState("local");
   const [failedRuns, setFailedRuns] = useState(0);
+  const { user } = useAuth();
+  const navItems = [
+    ...NAV,
+    ...(user?.role === "admin"
+      ? [{ href: "/admin", label: "Admin", hint: "Infrastructure and access" }]
+      : []),
+  ];
 
   useEffect(() => {
     let cancelled = false;
@@ -60,7 +69,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (needle.length < 2) {
       return [];
     }
-    const navHits = NAV.filter((item) => item.label.toLowerCase().includes(needle));
+    const navHits = navItems.filter((item) => item.label.toLowerCase().includes(needle));
     const qHits = SAMPLE_QUESTIONS.filter((item) =>
       item.question.toLowerCase().includes(needle),
     );
@@ -71,7 +80,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         label: item.question,
       })),
     ].slice(0, 6);
-  }, [query]);
+  }, [query, navItems]);
 
   return (
     <div className="console">
@@ -86,7 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </span>
         </Link>
         <nav aria-label="Product">
-          {NAV.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -158,9 +167,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               {apiOk === true ? "API live" : apiOk === false ? "API down" : "Checking"}
             </span>
             <span className="chip idle">{environment}</span>
-            <span className="chip idle" title="Local demo profile">
-              Local operator
-            </span>
+            <ProfileMenu />
           </div>
         </header>
         <div className="console-body">{children}</div>
