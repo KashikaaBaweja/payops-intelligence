@@ -8,6 +8,15 @@ class TimeWindow(BaseModel):
     start: datetime
     end: datetime
 
+    def token(self) -> str:
+        return f"{self.start.strftime('%Y%m%d')}-{self.end.strftime('%Y%m%d')}"
+
+
+def evidence_scope(merchant_id: str | None, window: TimeWindow | None) -> str:
+    """Stable, window-scoped suffix so catalog reads do not collide."""
+    merchant = merchant_id or "all"
+    return f"{merchant}-{window.token()}" if window is not None else merchant
+
 
 class Task(BaseModel):
     task_id: str
@@ -17,6 +26,9 @@ class Task(BaseModel):
         "inspect_webhooks",
         "compare_merchants",
         "merchant_health",
+        "score_risk",
+        "score_regression",
+        "validate_integrity",
     ]
     rationale: str
     query: str | None = None
@@ -56,7 +68,7 @@ class RetrievalHit(BaseModel):
 
 class EvidenceItem(BaseModel):
     evidence_id: str
-    source: Literal["doc", "metric", "webhook", "health"]
+    source: Literal["doc", "metric", "webhook", "health", "ml", "integrity"]
     doc_id: str | None = None
     section: str | None = None
     chunk_id: str | None = None
@@ -78,6 +90,72 @@ class SearchQuery(BaseModel):
     rationale: str = ""
 
 
+class QueryAnalysis(BaseModel):
+    """Structured query facets. Not private model reasoning."""
+
+    question: str
+    facets: list[str] = Field(default_factory=list)
+    error_codes: list[str] = Field(default_factory=list)
+    topics: list[str] = Field(default_factory=list)
+    tokens: list[str] = Field(default_factory=list)
+
+
+class RetrievalRound(BaseModel):
+    search_index: int
+    query: str
+    rewritten_from: str | None = None
+    rewrite_reason: str | None = None
+    retrieved: int
+    kept: int
+    rejected: int
+    sufficient: bool
+    decision: Literal["sufficient", "rewrite", "exhausted", "no_results"]
+    latency_ms: float
+    evidence_ids: list[str] = Field(default_factory=list)
+    missing_facets: list[str] = Field(default_factory=list)
+
+
+class SourceCitation(BaseModel):
+    evidence_id: str
+    document_id: str
+    section: str
+    score: float
+
+
+class AgenticRagResult(BaseModel):
+    """Bounded retrieve → evaluate → rewrite loop. Not a chatbot answer."""
+
+    question: str
+    analysis: QueryAnalysis
+    rounds: list[RetrievalRound] = Field(default_factory=list)
+    iterations: int = 0
+    max_iterations: int = 3
+    latency_ms: float = 0
+    sufficient: bool = False
+    conflicting: bool = False
+    conflict_note: str | None = None
+    queries: list[SearchQuery] = Field(default_factory=list)
+    evidence: EvidenceBundle = Field(default_factory=EvidenceBundle)
+    citations: list[SourceCitation] = Field(default_factory=list)
+    grounded_excerpt: str = ""
+    rejected_count: int = 0
+    sources_verified: bool = False
+
+
+class RetrievalSummary(BaseModel):
+    """Safe retrieval metadata for the investigation report."""
+
+    iterations: int = 0
+    max_iterations: int = 0
+    latency_ms: float = 0
+    sufficient: bool = False
+    conflicting: bool = False
+    conflict_note: str | None = None
+    grounded_excerpt: str = ""
+    citations: list[SourceCitation] = Field(default_factory=list)
+    rounds: list[RetrievalRound] = Field(default_factory=list)
+
+
 class ResearcherResult(BaseModel):
     """Retrieved evidence only. This is not a final investigation answer."""
 
@@ -85,6 +163,7 @@ class ResearcherResult(BaseModel):
     queries: list[SearchQuery] = Field(default_factory=list)
     evidence: EvidenceBundle = Field(default_factory=EvidenceBundle)
     rejected_count: int = 0
+    rag: AgenticRagResult | None = None
 
 
 AnalyticsOperation = Literal[
@@ -129,7 +208,7 @@ class MetricResult(BaseModel):
 
     def to_evidence(self) -> EvidenceItem:
         return EvidenceItem(
-            evidence_id=f"metric-{self.operation}-{self.merchant_id or 'all'}",
+            evidence_id=f"metric-{self.operation}-{evidence_scope(self.merchant_id, self.window)}",
             source="metric",
             score=None,
             text_snippet=f"{self.metric}={self.value}",
@@ -307,6 +386,7 @@ class IncidentReport(BaseModel):
     sources: list[EvidenceRef] = Field(default_factory=list)
     agent_execution_summary: list[TraceEvent] = Field(default_factory=list)
     evidence_sufficient: bool
+    retrieval: RetrievalSummary | None = None
 
 
 class HealthFactor(BaseModel):
@@ -339,7 +419,7 @@ class MerchantHealthScore(BaseModel):
 
     def to_evidence(self) -> EvidenceItem:
         return EvidenceItem(
-            evidence_id=f"health-{self.merchant_id}",
+            evidence_id=f"health-{evidence_scope(self.merchant_id, self.window)}",
             source="health",
             text_snippet=(
                 f"health_score={self.score} band={self.band} "
@@ -352,6 +432,283 @@ class MerchantHealthScore(BaseModel):
                 "penalties": [item.model_dump() for item in self.penalties],
             },
         )
+
+
+class RiskContribution(BaseModel):
+    feature: str
+    coefficient: float
+    value: float
+    contribution: float
+    explanation: str
+
+
+class ConfusionMatrix(BaseModel):
+    true_negative: int
+    false_positive: int
+    false_negative: int
+    true_positive: int
+
+
+class ModelCard(BaseModel):
+    task: Literal["classification", "regression"]
+    algorithm: str
+    target: str
+    model_version: str
+    dataset_version: str
+    feature_names: list[str]
+    train_rows: int
+    test_rows: int
+
+
+class ClassificationQuality(BaseModel):
+    """Holdout classification metrics for the failed class, plus overall accuracy."""
+
+    accuracy: float
+    precision: float
+    recall: float
+    f1: float
+    roc_auc: float | None = None
+    positive_support: int
+    test_size: int
+    confusion_matrix: ConfusionMatrix
+
+
+class RegressionQuality(BaseModel):
+    mae: float
+    rmse: float
+    r2: float
+    test_size: int
+
+
+class ModelQuality(ClassificationQuality):
+    """Legacy alias used by older risk payloads. Classification only."""
+
+
+class MerchantRiskScore(BaseModel):
+    """Window-level classification signal. Not a fraud decision."""
+
+    merchant_id: str
+    window: TimeWindow | None = None
+    sample_size: int
+    fail_count: int
+    prediction: str
+    risk_probability: float = Field(ge=0, le=1)
+    class_probabilities: dict[str, float] = Field(default_factory=dict)
+    risk_class: Literal["LOW", "MEDIUM", "HIGH"]
+    expected_loss_cents: int = 0
+    currency: str = "INR"
+    features: dict[str, float] = Field(default_factory=dict)
+    contributions: list[RiskContribution] = Field(default_factory=list)
+    quality: ClassificationQuality
+    card: ModelCard | None = None
+    next_action: Literal["monitor", "investigate"]
+    notes: str
+
+    def to_evidence(self) -> EvidenceItem:
+        return EvidenceItem(
+            evidence_id=f"ml-{evidence_scope(self.merchant_id, self.window)}",
+            source="ml",
+            text_snippet=(
+                f"Predicted failure risk={self.risk_class} p={self.risk_probability:.2f}. "
+                "Classification only; not a fraud decision."
+            ),
+            metadata={
+                "task": "classification",
+                "prediction": self.prediction,
+                "risk_class": self.risk_class,
+                "risk_probability": self.risk_probability,
+                "class_probabilities": self.class_probabilities,
+                "sample_size": self.sample_size,
+                "next_action": self.next_action,
+                "accuracy": self.quality.accuracy,
+                "precision": self.quality.precision,
+                "recall": self.quality.recall,
+                "f1": self.quality.f1,
+                "roc_auc": self.quality.roc_auc,
+                "model_version": self.card.model_version if self.card else None,
+                "dataset_version": self.card.dataset_version if self.card else None,
+            },
+        )
+
+
+class RegressionScore(BaseModel):
+    """Capture-latency regression. Separate from the failure classifier."""
+
+    merchant_id: str
+    window: TimeWindow | None = None
+    sample_size: int
+    target: str = "capture_latency_seconds"
+    prediction: float
+    unit: str = "seconds"
+    features: dict[str, float] = Field(default_factory=dict)
+    contributions: list[RiskContribution] = Field(default_factory=list)
+    quality: RegressionQuality
+    card: ModelCard
+    notes: str
+
+    def to_evidence(self) -> EvidenceItem:
+        return EvidenceItem(
+            evidence_id=f"ml-reg-{evidence_scope(self.merchant_id, self.window)}",
+            source="ml",
+            text_snippet=(
+                f"Predicted {self.target}={self.prediction:.2f} {self.unit}. "
+                f"MAE={self.quality.mae} RMSE={self.quality.rmse} R2={self.quality.r2}."
+            ),
+            metadata={
+                "task": "regression",
+                "prediction": self.prediction,
+                "target": self.target,
+                "unit": self.unit,
+                "sample_size": self.sample_size,
+                "mae": self.quality.mae,
+                "rmse": self.quality.rmse,
+                "r2": self.quality.r2,
+                "model_version": self.card.model_version,
+                "dataset_version": self.card.dataset_version,
+            },
+        )
+
+
+class IntegrityCheck(BaseModel):
+    check_id: str
+    name: str
+    passed: bool
+    observed: int
+    invariant: str
+    explanation: str
+
+
+class IntegrityReport(BaseModel):
+    """Read-time consistency checks. Not a commit/rollback simulator."""
+
+    merchant_id: str | None = None
+    window: TimeWindow | None = None
+    passed: bool
+    sample_size: int
+    checks: list[IntegrityCheck]
+    schema_invariants: list[str] = Field(default_factory=list)
+    notes: str
+
+    def to_evidence(self) -> EvidenceItem:
+        failed = [item.check_id for item in self.checks if not item.passed]
+        return EvidenceItem(
+            evidence_id=f"integrity-{evidence_scope(self.merchant_id, self.window)}",
+            source="integrity",
+            text_snippet=(
+                "integrity pass: no consistency violations in payment and order checks"
+                if self.passed
+                else (
+                    "integrity fail: consistency violations in payment and order checks "
+                    f"failed={failed}"
+                )
+            ),
+            metadata={
+                "passed": self.passed,
+                "failed_checks": failed,
+                "sample_size": self.sample_size,
+                "checks": [item.model_dump() for item in self.checks],
+                "schema_invariants": self.schema_invariants,
+            },
+        )
+
+
+class LedgerAccountView(BaseModel):
+    account_id: str
+    merchant_id: str | None = None
+    kind: str
+    currency: str
+    balance_cents: int
+    version: int
+    status: str
+
+
+class TransferOperation(BaseModel):
+    name: str
+    state: str
+    account_id: str | None = None
+    delta_cents: int | None = None
+
+
+class TransferAuditEvent(BaseModel):
+    audit_id: str
+    event: str
+    detail: str
+    created_at: datetime
+
+
+class TransferRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    from_account_id: str = Field(
+        min_length=3,
+        max_length=32,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{2,31}$",
+    )
+    to_account_id: str = Field(
+        min_length=3,
+        max_length=32,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{2,31}$",
+    )
+    amount_cents: int = Field(gt=0, le=10_000_000)
+    fail_at: Literal["after_debit", "after_credit", "after_ledger", "before_commit"] | None = None
+
+
+class TransferResult(BaseModel):
+    """Outcome of a real database debit/credit/ledger transaction."""
+
+    transfer_id: str
+    status: Literal["committed", "rolled_back"]
+    current_state: str
+    from_account_id: str
+    to_account_id: str
+    amount_cents: int
+    isolation_level: str
+    isolation_reason: str
+    fail_at: str | None = None
+    failure_point: str | None = None
+    before_balance: dict[str, int]
+    after_balance: dict[str, int]
+    operations: list[TransferOperation]
+    commit_or_rollback: Literal["COMMIT", "ROLLBACK"]
+    audit_events: list[TransferAuditEvent] = Field(default_factory=list)
+    notes: str
+
+
+class LedgerAccountsResponse(BaseModel):
+    isolation_level: str
+    isolation_reason: str
+    accounts: list[LedgerAccountView]
+
+
+class IntegrityAgentResult(BaseModel):
+    """Integrity findings only. This is not a final investigation report."""
+
+    question: str
+    report: IntegrityReport
+    evidence: EvidenceBundle = Field(default_factory=EvidenceBundle)
+
+
+class RiskWhatIfRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    method_id: str = Field(pattern=r"^(card|upi|netbanking|wallet)$")
+    amount_cents: int = Field(gt=0, le=10_000_000)
+    hour: int | None = Field(default=None, ge=0, le=23)
+    weekday: int | None = Field(default=None, ge=0, le=6)
+    prior_fail_rate: float | None = Field(default=None, ge=0, le=1)
+
+
+class RiskWhatIfScore(BaseModel):
+    merchant_id: str
+    method_id: str
+    amount_cents: int
+    risk_probability: float = Field(ge=0, le=1)
+    risk_class: Literal["LOW", "MEDIUM", "HIGH"]
+    expected_loss_cents: int
+    currency: str = "INR"
+    contributions: list[RiskContribution] = Field(default_factory=list)
+    next_action: Literal["monitor", "investigate"]
+    notes: str
 
 
 class HealthResponse(BaseModel):

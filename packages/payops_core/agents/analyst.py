@@ -47,8 +47,10 @@ class DataAnalystAgent:
         previous_window: TimeWindow | None = None,
         task: Task | None = None,
     ) -> AnalystResult:
-        if task is not None and task.task_type != "query_metrics":
-            raise ValueError("DataAnalystAgent only executes query_metrics tasks")
+        if task is not None and task.task_type not in {"query_metrics", "compare_merchants"}:
+            raise ValueError(
+                "DataAnalystAgent only executes query_metrics or compare_merchants tasks"
+            )
         found = [match.group(0).upper() for match in _MERCHANT.finditer(question)]
         if task is not None and task.merchant_id:
             merchant_id = task.merchant_id

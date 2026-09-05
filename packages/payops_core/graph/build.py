@@ -1,3 +1,17 @@
+"""LangGraph investigation FSM.
+
+Product agents map to existing nodes and catalog tools — not one giant prompt:
+
+1. Orchestrator — this compiled graph (planner → investigate → sufficiency ⇄ refine → …)
+2. Research — ResearcherAgent formulates queries and scores relevance
+3. Retrieval — RetrievalAgent executes search_docs
+4. Data Analyst — DataAnalystAgent / SqlToolGateway
+5. ML — MLAgent / score_risk or score_regression (never mixed metrics)
+6. Transaction Integrity — TransactionIntegrityAgent / validate_integrity
+7. Critic/Verifier — VerifierAgent then CriticAgent
+8. Report Writer — WriterAgent
+"""
+
 from __future__ import annotations
 
 import time
@@ -26,10 +40,14 @@ from payops_core.models.schemas import EvidenceBundle, IncidentReport
 from payops_core.rag.retriever import DocumentRetriever
 
 
-def initial_state(question: str, max_iterations: int) -> InvestigationState:
+def initial_state(
+    question: str,
+    max_iterations: int,
+    merchant_id: str | None = None,
+) -> InvestigationState:
     return {
         "question": question,
-        "merchant_id": None,
+        "merchant_id": merchant_id,
         "time_window": None,
         "plan": None,
         "evidence": EvidenceBundle(),
@@ -48,6 +66,7 @@ def initial_state(question: str, max_iterations: int) -> InvestigationState:
         "completed_task_ids": [],
         "error": None,
         "timed_out": False,
+        "retrieval": None,
     }
 
 
@@ -104,6 +123,7 @@ def run_investigation(
     session: Session,
     max_iterations: int | None = None,
     timeout_seconds: float | None = None,
+    merchant_id: str | None = None,
 ) -> InvestigationState:
     settings = get_settings()
     runtime = GraphRuntime(
@@ -113,7 +133,13 @@ def run_investigation(
         started_at=time.monotonic(),
     )
     graph = build_investigation_graph(runtime)
-    result = graph.invoke(initial_state(question, max_iterations or settings.max_iterations))
+    result = graph.invoke(
+        initial_state(
+            question,
+            max_iterations or settings.max_iterations,
+            merchant_id=merchant_id,
+        )
+    )
     return result  # type: ignore[return-value]
 
 

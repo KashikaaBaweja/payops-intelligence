@@ -19,6 +19,8 @@ dependencies = [
   "pypdf>=5.1.0",
   "sqlalchemy>=2.0.36",
   "langgraph>=0.2.76",
+  "scikit-learn>=1.5.0",
+  "numpy>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -50,6 +52,8 @@ packages = [
   "payops_core.rag",
   "payops_core.eval",
   "payops_core.tools",
+  "payops_core.ml",
+  "payops_core.ledger",
   "apps",
   "apps.api",
   "apps.api.routers",
@@ -63,6 +67,7 @@ apps = "apps"
 testpaths = ["tests"]
 pythonpath = ["packages", "."]
 asyncio_mode = "auto"
+addopts = "-p no:langsmith"
 
 [tool.ruff]
 line-length = 100

@@ -10,6 +10,7 @@ from payops_core.models.schemas import (
     IncidentReport,
     InvestigationPlan,
     MetricResult,
+    RetrievalSummary,
     SufficiencyVerdict,
     Task,
     TimeWindow,
@@ -42,3 +43,4 @@ class InvestigationState(TypedDict, total=False):
     completed_task_ids: Annotated[list[str], operator.add]
     error: str | None
     timed_out: bool
+    retrieval: RetrievalSummary | None

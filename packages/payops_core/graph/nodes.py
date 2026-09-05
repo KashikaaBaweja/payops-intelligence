@@ -3,22 +3,33 @@ from __future__ import annotations
 from payops_core.agents.analyst import DataAnalystAgent
 from payops_core.agents.critic import CriticAgent
 from payops_core.agents.incident import IncidentRiskAgent
+from payops_core.agents.integrity import TransactionIntegrityAgent
+from payops_core.agents.ml_agent import MLAgent
 from payops_core.agents.planner import DEFAULT_WINDOW, PlannerAgent
 from payops_core.agents.researcher import ResearcherAgent
 from payops_core.agents.sufficiency import SufficiencyAgent, task_from_gap
 from payops_core.agents.verifier import VerifierAgent
 from payops_core.agents.webhook_inspector import WebhookInspectorAgent
 from payops_core.agents.writer import WriterAgent
+from payops_core.config import get_settings
 from payops_core.graph.runtime import GraphRuntime
 from payops_core.graph.state import InvestigationState
 from payops_core.graph.trace import safe_trace
-from payops_core.models.schemas import EvidenceBundle, EvidenceItem, MetricResult, Task
+from payops_core.models.schemas import (
+    AgenticRagResult,
+    EvidenceBundle,
+    EvidenceItem,
+    MetricResult,
+    RetrievalSummary,
+    Task,
+    TraceEvent,
+)
 from payops_core.tools.merchant_health import score_merchant
 
 
 def planner_node(state: InvestigationState) -> dict:
     question = state["question"]
-    plan = PlannerAgent().plan(question)
+    plan = PlannerAgent().plan(question, merchant_id=state.get("merchant_id"))
     return {
         "plan": plan,
         "merchant_id": plan.merchant_id,
@@ -52,17 +63,29 @@ def investigate_node(state: InvestigationState, runtime: GraphRuntime) -> dict:
             "iteration": iteration,
             "trace": [safe_trace(node="investigate", action="skip", decision="no_pending_tasks")],
         }
-    task = pending[0]
-    remaining = pending[1:]
-    try:
-        items, metrics, tool, query = _run_task(state, runtime, task)
-    except Exception as exc:  # noqa: BLE001
-        return {
-            "iteration": iteration,
-            "error": f"{type(exc).__name__}: {exc}"[:300],
-            "pending_tasks": remaining,
-            "completed_task_ids": [task.task_id],
-            "trace": [
+    evidence = state.get("evidence") or EvidenceBundle()
+    combined_metrics = list(state.get("metrics") or [])
+    retrieval = state.get("retrieval")
+    traces = []
+    completed: list[str] = []
+    failures: list[str] = []
+    for index, task in enumerate(pending):
+        if runtime.expired():
+            return {
+                "iteration": iteration,
+                "timed_out": True,
+                "pending_tasks": pending[index:],
+                "completed_task_ids": completed,
+                "evidence": evidence,
+                "metrics": combined_metrics,
+                "trace": traces
+                + [safe_trace(node="investigate", action="timeout", decision="timeout")],
+            }
+        try:
+            items, metrics, tool, query, rag = _run_task(state, runtime, task)
+        except Exception as exc:  # noqa: BLE001
+            failures.append(f"{task.task_type}:{type(exc).__name__}: {exc}"[:180])
+            traces.append(
                 safe_trace(
                     node="investigate",
                     action="failed",
@@ -70,17 +93,15 @@ def investigate_node(state: InvestigationState, runtime: GraphRuntime) -> dict:
                     search_query=task.query,
                     decision="failed",
                 )
-            ],
-        }
-    evidence = _merge_evidence(state.get("evidence") or EvidenceBundle(), items)
-    combined_metrics = list(state.get("metrics") or []) + metrics
-    return {
-        "iteration": iteration,
-        "pending_tasks": remaining,
-        "completed_task_ids": [task.task_id],
-        "evidence": evidence,
-        "metrics": combined_metrics,
-        "trace": [
+            )
+            continue
+        evidence = _merge_evidence(evidence, items)
+        combined_metrics = combined_metrics + metrics
+        completed.append(task.task_id)
+        if rag is not None:
+            traces.extend(_rag_traces(rag))
+            retrieval = _retrieval_summary(rag)
+        traces.append(
             safe_trace(
                 node="investigate",
                 action="run_task",
@@ -89,7 +110,20 @@ def investigate_node(state: InvestigationState, runtime: GraphRuntime) -> dict:
                 evidence_ids=[item.evidence_id for item in items],
                 decision=task.task_type,
             )
-        ],
+        )
+    return {
+        "iteration": iteration,
+        "pending_tasks": [],
+        "completed_task_ids": completed,
+        "evidence": evidence,
+        "metrics": combined_metrics,
+        "retrieval": retrieval,
+        "error": (
+            "; ".join(failures)
+            if failures and not completed
+            else state.get("error")
+        ),
+        "trace": traces,
     }
 
 
@@ -236,6 +270,7 @@ def writer_node(state: InvestigationState) -> dict:
         trace=list(state.get("trace") or []),
         error=state.get("error"),
         timed_out=bool(state.get("timed_out")),
+        retrieval=state.get("retrieval"),
     )
     return {
         "report": report,
@@ -288,38 +323,121 @@ def _run_task(
     state: InvestigationState,
     runtime: GraphRuntime,
     task: Task,
-) -> tuple[list[EvidenceItem], list[MetricResult], str, str | None]:
+) -> tuple[list[EvidenceItem], list[MetricResult], str, str | None, AgenticRagResult | None]:
     question = state["question"]
     merchant_id = task.merchant_id or state.get("merchant_id")
     window = state.get("time_window") or DEFAULT_WINDOW
     if task.task_type == "retrieve_docs":
-        result = ResearcherAgent(runtime.retriever).research(task.query or question, task=task)
+        result = ResearcherAgent(
+            runtime.retriever,
+            max_iterations=get_settings().rag_max_iterations,
+        ).research(task.query or question, task=task)
         query = result.queries[0].query if result.queries else task.query
-        return result.evidence.items, [], "search_docs", query
+        return result.evidence.items, [], "search_docs", query, result.rag
     if task.task_type == "merchant_health":
         if not merchant_id:
             raise ValueError("merchant_health requires a merchant_id")
         scored = score_merchant(runtime.session, merchant_id, window)
-        return [scored.to_evidence()], [], "merchant_health", task.query
+        return [scored.to_evidence()], [], "merchant_health", task.query, None
+    if task.task_type == "score_risk":
+        if not merchant_id:
+            raise ValueError("score_risk requires a merchant_id")
+        return (
+            MLAgent().run_classification(runtime.session, merchant_id, window).items,
+            [],
+            "ml_risk",
+            task.query,
+            None,
+        )
+    if task.task_type == "score_regression":
+        if not merchant_id:
+            raise ValueError("score_regression requires a merchant_id")
+        return (
+            MLAgent().run_regression(runtime.session, merchant_id, window).items,
+            [],
+            "ml_regression",
+            task.query,
+            None,
+        )
+    if task.task_type == "validate_integrity":
+        result = TransactionIntegrityAgent(runtime.session).inspect(
+            task.query or question,
+            window=window,
+            merchant_id=merchant_id,
+            task=task,
+        )
+        return result.evidence.items, [], "validate_integrity", task.query, None
     if task.task_type in {"query_metrics", "compare_merchants"}:
         result = DataAnalystAgent(runtime.session).analyze(
             task.query or question,
             window=window,
             merchant_id=merchant_id,
             method_id=task.method_id,
-            task=task if task.task_type == "query_metrics" else None,
+            task=task,
         )
         items = [metric.to_evidence() for metric in result.metrics]
         tool = result.operations[0] if result.operations else "sql_gateway"
-        return items, result.metrics, tool, task.query
+        return items, result.metrics, tool, task.query, None
+    if task.task_type != "inspect_webhooks":
+        raise ValueError(f"unknown task type: {task.task_type}")
     result = WebhookInspectorAgent(runtime.session).inspect(
         task.query or question,
         window=window,
         merchant_id=merchant_id,
-        task=task if task.task_type == "inspect_webhooks" else None,
+        task=task,
     )
     tool = result.operations[0] if result.operations else "webhook_gateway"
-    return result.evidence.items, [], tool, task.query
+    return result.evidence.items, [], tool, task.query, None
+
+
+def _rag_traces(rag: AgenticRagResult) -> list[TraceEvent]:
+    events: list[TraceEvent] = []
+    for index, step in enumerate(rag.rounds):
+        events.append(
+            safe_trace(
+                node="investigate",
+                action="rag_search",
+                tool="search_docs",
+                search_query=step.query,
+                evidence_ids=step.evidence_ids,
+                decision=f"search_{step.search_index}:{step.decision}",
+            )
+        )
+        nxt = rag.rounds[index + 1] if index + 1 < len(rag.rounds) else None
+        if nxt is not None:
+            events.append(
+                safe_trace(
+                    node="investigate",
+                    action="rag_rewrite",
+                    tool="search_docs",
+                    search_query=nxt.query,
+                    decision=nxt.rewrite_reason or "query rewritten",
+                )
+            )
+    events.append(
+        safe_trace(
+            node="investigate",
+            action="rag_answer",
+            tool="search_docs",
+            evidence_ids=[item.evidence_id for item in rag.citations],
+            decision="grounded" if rag.sources_verified and rag.sufficient else "insufficient",
+        )
+    )
+    return events
+
+
+def _retrieval_summary(rag: AgenticRagResult) -> RetrievalSummary:
+    return RetrievalSummary(
+        iterations=rag.iterations,
+        max_iterations=rag.max_iterations,
+        latency_ms=rag.latency_ms,
+        sufficient=rag.sufficient,
+        conflicting=rag.conflicting,
+        conflict_note=rag.conflict_note,
+        grounded_excerpt=rag.grounded_excerpt,
+        citations=rag.citations,
+        rounds=rag.rounds,
+    )
 
 
 def _merge_evidence(bundle: EvidenceBundle, items: list[EvidenceItem]) -> EvidenceBundle:

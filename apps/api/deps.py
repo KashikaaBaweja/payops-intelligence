@@ -2,7 +2,7 @@ from collections.abc import Iterator
 from logging import getLogger
 from pathlib import Path
 
-from fastapi import Request
+from fastapi import Depends, Request
 from payops_core.config import Settings, get_settings
 from payops_core.data.engine import make_engine, session_factory
 from payops_core.rag.errors import IngestError
@@ -37,12 +37,8 @@ def get_session(request: Request) -> Iterator[Session]:
         session.close()
 
 
-def get_store(request: Request) -> InvestigationStore:
-    store = getattr(request.app.state, "investigations", None)
-    if store is None:
-        store = InvestigationStore()
-        request.app.state.investigations = store
-    return store
+def get_store(session: Session = Depends(get_session)) -> InvestigationStore:
+    return InvestigationStore(session)
 
 
 def get_retriever(request: Request) -> DocumentRetriever:
@@ -56,7 +52,19 @@ def get_retriever(request: Request) -> DocumentRetriever:
 def build_startup_retriever() -> DocumentRetriever:
     settings = get_settings()
     if settings.vector_backend == "pgvector":
-        return build_retriever()
+        retriever = build_retriever()
+        try:
+            if retriever.store.count() > 0:
+                return retriever
+            store, count = ingest_corpus(
+                directory=Path(settings.corpus_dir),
+                store=retriever.store,
+            )
+            logger.info("corpus_ingested backend=pgvector chunks=%s", count)
+            return DocumentRetriever(store)
+        except IngestError:
+            logger.warning("corpus_unavailable backend=pgvector")
+            return retriever
     try:
         store, _count = ingest_corpus(
             directory=Path(settings.corpus_dir),

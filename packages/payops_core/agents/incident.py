@@ -28,6 +28,36 @@ class IncidentRiskAgent:
             item.source == "webhook" and item.metadata.get("kind") == "delayed"
             for item in evidence.items
         )
+        high_risk = any(
+            item.source == "ml" and item.metadata.get("risk_class") == "HIGH"
+            for item in evidence.items
+        )
+        if high_risk:
+            hypotheses.append(
+                Hypothesis(
+                    cause="Elevated model-predicted failure risk in the window",
+                    supporting_evidence_ids=[
+                        item.evidence_id for item in evidence.items if item.source == "ml"
+                    ][:5],
+                    confidence=0.55,
+                    category="model",
+                )
+            )
+        integrity_items = [item for item in evidence.items if item.source == "integrity"]
+        if integrity_items:
+            passed = all(item.metadata.get("passed") is True for item in integrity_items)
+            hypotheses.append(
+                Hypothesis(
+                    cause=(
+                        "Integrity catalog found no consistency violations"
+                        if passed
+                        else "Integrity catalog found consistency violations"
+                    ),
+                    supporting_evidence_ids=[item.evidence_id for item in integrity_items][:5],
+                    confidence=0.75 if passed else 0.7,
+                    category="integrity",
+                )
+            )
         if delayed:
             hypotheses.append(
                 Hypothesis(
@@ -71,4 +101,4 @@ def _ids_for(evidence: EvidenceBundle, needles: tuple[str, ...]) -> list[str]:
         for item in evidence.items
         if any(needle.lower() in item.text_snippet.lower() for needle in needles)
     ]
-    return found[:5] or evidence.ids()[:5]
+    return found[:5]

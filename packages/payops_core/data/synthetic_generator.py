@@ -11,6 +11,10 @@ from sqlalchemy.orm import Session
 from payops_core.data.models import (
     Dispute,
     ErrorCode,
+    LedgerAccount,
+    LedgerAuditEvent,
+    LedgerEntry,
+    LedgerTransfer,
     Merchant,
     Order,
     Payment,
@@ -19,6 +23,7 @@ from payops_core.data.models import (
     Settlement,
     WebhookEvent,
 )
+from payops_core.ledger.accounts import seed_ledger_accounts
 
 METHODS = [
     ("card", "Card", "card"),
@@ -73,6 +78,7 @@ def generate(session: Session, seed: int = 42) -> dict[str, Any]:
     rng = random.Random(seed)
     _reset(session)
     _catalog(session)
+    seed_ledger_accounts(session)
     payment_count = _traffic(session, rng)
     payment_count = _plant_incidents(session, rng, payment_count)
     _settlements(session)
@@ -86,6 +92,10 @@ def generate(session: Session, seed: int = 42) -> dict[str, Any]:
 
 def _reset(session: Session) -> None:
     models = (
+        LedgerAuditEvent,
+        LedgerEntry,
+        LedgerTransfer,
+        LedgerAccount,
         WebhookEvent,
         Dispute,
         Refund,

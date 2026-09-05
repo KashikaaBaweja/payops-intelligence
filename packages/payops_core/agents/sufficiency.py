@@ -14,6 +14,9 @@ _SOURCE_FOR_TASK = {
     "inspect_webhooks": "webhook",
     "compare_merchants": "metric",
     "merchant_health": "health",
+    "score_risk": "ml",
+    "score_regression": "ml",
+    "validate_integrity": "integrity",
 }
 
 
@@ -37,7 +40,9 @@ class SufficiencyAgent:
                 next_action="investigate",
                 reason="planner produced no tasks",
             )
-        present = {item.source for item in evidence.items}
+        present = {
+            item.source for item in evidence.items if not item.metadata.get("error")
+        }
         missing: list[EvidenceGap] = []
         for task in plan.tasks:
             needed = _SOURCE_FOR_TASK.get(task.task_type, "doc")

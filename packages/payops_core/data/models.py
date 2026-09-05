@@ -247,3 +247,131 @@ class WebhookEvent(Base):
     extra: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, nullable=False, default=dict)
 
     payment: Mapped[Payment] = relationship(back_populates="webhook_events")
+
+
+class LedgerAccount(Base):
+    """Wallet used by the live debit/credit transfer. Balance is application state."""
+
+    __tablename__ = "ledger_accounts"
+    __table_args__ = (
+        CheckConstraint("balance_cents >= 0", name="ck_ledger_accounts_balance_nonnegative"),
+        CheckConstraint(
+            "kind IN ('merchant_wallet', 'platform_clearing')",
+            name="ck_ledger_accounts_kind",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'frozen')",
+            name="ck_ledger_accounts_status",
+        ),
+        Index("ix_ledger_accounts_merchant", "merchant_id"),
+    )
+
+    account_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    merchant_id: Mapped[str | None] = mapped_column(
+        String(32), ForeignKey("merchants.merchant_id", ondelete="RESTRICT"), nullable=True
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="INR")
+    balance_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+
+class LedgerTransfer(Base):
+    """One attempted or committed double-entry transfer."""
+
+    __tablename__ = "ledger_transfers"
+    __table_args__ = (
+        CheckConstraint("amount_cents > 0", name="ck_ledger_transfers_amount_positive"),
+        CheckConstraint(
+            "status IN ('committed', 'rolled_back')",
+            name="ck_ledger_transfers_status",
+        ),
+        Index("ix_ledger_transfers_created", "created_at"),
+    )
+
+    transfer_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    from_account_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("ledger_accounts.account_id", ondelete="RESTRICT"), nullable=False
+    )
+    to_account_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("ledger_accounts.account_id", ondelete="RESTRICT"), nullable=False
+    )
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="INR")
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    isolation_level: Mapped[str] = mapped_column(String(32), nullable=False)
+    fail_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    failure_point: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    before_from_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    before_to_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    after_from_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    after_to_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+
+class LedgerEntry(Base):
+    __tablename__ = "ledger_entries"
+    __table_args__ = (
+        CheckConstraint("amount_cents > 0", name="ck_ledger_entries_amount_positive"),
+        CheckConstraint(
+            "direction IN ('debit', 'credit')",
+            name="ck_ledger_entries_direction",
+        ),
+        Index("ix_ledger_entries_transfer", "transfer_id"),
+    )
+
+    entry_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    transfer_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("ledger_transfers.transfer_id", ondelete="CASCADE"), nullable=False
+    )
+    account_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("ledger_accounts.account_id", ondelete="RESTRICT"), nullable=False
+    )
+    direction: Mapped[str] = mapped_column(String(16), nullable=False)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+
+class LedgerAuditEvent(Base):
+    __tablename__ = "ledger_audit_events"
+    __table_args__ = (Index("ix_ledger_audit_transfer", "transfer_id"),)
+
+    audit_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    transfer_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("ledger_transfers.transfer_id", ondelete="CASCADE"), nullable=False
+    )
+    event: Mapped[str] = mapped_column(String(32), nullable=False)
+    detail: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+
+class InvestigationRun(Base):
+    """Durable investigation report and execution trace."""
+
+    __tablename__ = "investigation_runs"
+    __table_args__ = (Index("ix_investigation_runs_created_at", "created_at"),)
+
+    investigation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    merchant_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    report_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    trace_json: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+
+class EvidenceIndex(Base):
+    """Resolvable evidence citations for investigations and catalog reads."""
+
+    __tablename__ = "evidence_index"
+    __table_args__ = (Index("ix_evidence_index_investigation", "investigation_id"),)
+
+    evidence_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    investigation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)

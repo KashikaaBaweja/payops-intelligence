@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     vector_backend: str = "memory"
     corpus_dir: str = "docs/corpus"
     max_iterations: int = 3
+    rag_max_iterations: int = 3
     graph_timeout_seconds: float = 30.0
     auto_migrate: bool = False
     seed_on_start: bool = False

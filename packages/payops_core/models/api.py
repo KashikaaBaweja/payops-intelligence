@@ -50,6 +50,46 @@ class InvestigationResponse(BaseModel):
     error: str | None = None
 
 
+class InvestigationSummary(BaseModel):
+    investigation_id: str
+    question: str
+    status: Literal["completed", "failed"]
+    created_at: datetime
+    merchant_id: str | None = None
+    confidence: float | None = None
+    evidence_sufficient: bool | None = None
+
+
+class InvestigationListResponse(BaseModel):
+    items: list[InvestigationSummary] = Field(default_factory=list)
+    total: int = 0
+
+
+class ServiceStatus(BaseModel):
+    name: str
+    status: Literal["ok", "down", "disabled", "degraded"]
+    detail: str
+
+
+class SystemHealthResponse(BaseModel):
+    status: Literal["ok", "degraded", "down"]
+    environment: str
+    version: str
+    services: list[ServiceStatus]
+
+
+class CorpusDocument(BaseModel):
+    document_id: str
+    name: str
+    kind: str
+    bytes: int
+
+
+class CorpusResponse(BaseModel):
+    backend: str
+    documents: list[CorpusDocument] = Field(default_factory=list)
+
+
 class InvestigationTraceResponse(BaseModel):
     investigation_id: str
     events: list[TraceEvent] = Field(default_factory=list)

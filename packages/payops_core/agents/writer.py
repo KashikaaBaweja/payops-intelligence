@@ -9,6 +9,7 @@ from payops_core.models.schemas import (
     Hypothesis,
     IncidentReport,
     MetricResult,
+    RetrievalSummary,
     SufficiencyVerdict,
     TimeWindow,
     TraceEvent,
@@ -33,6 +34,7 @@ class WriterAgent:
         trace: list[TraceEvent],
         error: str | None = None,
         timed_out: bool = False,
+        retrieval: RetrievalSummary | None = None,
     ) -> IncidentReport:
         known = set(evidence.ids())
         sufficient = bool(sufficiency and sufficiency.sufficient and not timed_out and not error)
@@ -50,6 +52,7 @@ class WriterAgent:
             for item in evidence.items
         ]
         findings = [item.text_snippet[:180] for item in evidence.items[:8]]
+        findings.extend(_ml_notes(evidence))
         findings.extend(_verifier_notes(claims))
         if critique and critique.revision_instructions:
             findings.append(critique.revision_instructions)
@@ -57,6 +60,12 @@ class WriterAgent:
             findings.insert(0, f"Investigation failed: {error}")
         if timed_out:
             findings.insert(0, "Investigation timed out")
+        if retrieval and retrieval.grounded_excerpt:
+            findings.insert(0, retrieval.grounded_excerpt[:240])
+        if retrieval and retrieval.conflicting:
+            findings.append(
+                f"Document sources conflict ({retrieval.conflict_note}). No single cause was named."
+            )
         if not sufficient:
             findings.append("Evidence was insufficient for a confident root cause.")
         summary = _summary(question, sufficient, cause, timed_out, error)
@@ -79,6 +88,7 @@ class WriterAgent:
             sources=refs,
             agent_execution_summary=trace,
             evidence_sufficient=sufficient,
+            retrieval=retrieval,
         )
 
 
@@ -123,6 +133,31 @@ def _cause(
             ]
         }
     )
+
+
+def _ml_notes(evidence: EvidenceBundle) -> list[str]:
+    notes: list[str] = []
+    for item in evidence.items:
+        if item.source != "ml":
+            continue
+        meta = item.metadata
+        if meta.get("error"):
+            notes.append(item.text_snippet[:180])
+            continue
+        if meta.get("task") == "classification":
+            auc = meta.get("roc_auc")
+            notes.append(
+                "Classifier holdout: "
+                f"accuracy={meta.get('accuracy')} precision={meta.get('precision')} "
+                f"recall={meta.get('recall')} F1={meta.get('f1')} "
+                f"ROC-AUC={'n/a' if auc is None else auc}. Not a fraud decision."
+            )
+        elif meta.get("task") == "regression":
+            notes.append(
+                "Capture-latency regressor holdout: "
+                f"MAE={meta.get('mae')} RMSE={meta.get('rmse')} R2={meta.get('r2')}."
+            )
+    return notes
 
 
 def _verifier_notes(claims: list[VerifiedClaim]) -> list[str]:
@@ -177,4 +212,14 @@ def _actions(sufficient: bool, category: str) -> list[str]:
         return ["Fail over the affected method", "Page the processor"]
     if category == "webhooks":
         return ["Inspect delayed ACK consumers", "Do not treat delayed webhooks as declines"]
+    if category == "model":
+        return [
+            "Treat the score as a signal, not a fraud decision",
+            "Investigate observed failure metrics and runbooks for the same window",
+        ]
+    if category == "integrity":
+        return [
+            "Record the integrity catalog result on the investigation",
+            "Do not treat a schema invariant as a live ACID commit/rollback demo",
+        ]
     return ["Review the cited evidence with ops"]
