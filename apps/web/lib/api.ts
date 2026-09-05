@@ -1,10 +1,18 @@
 import type {
   ApiErrorBody,
+  CorpusResponse,
   EvidenceItem,
+  InvestigationListResponse,
   InvestigationResponse,
   InvestigationTraceResponse,
   MerchantHealthScore,
   MerchantMetricsResponse,
+  LedgerAccountsResponse,
+  MerchantRiskScore,
+  RegressionScore,
+  RiskWhatIfScore,
+  SystemHealthResponse,
+  TransferResult,
 } from "./types";
 import { ApiError } from "./types";
 
@@ -21,7 +29,7 @@ function detailMessage(detail: ApiErrorBody["detail"]): string {
 }
 
 const API_DOWN =
-  "Cannot reach the PayOps API on port 8000. From the repo root run: source .venv/bin/activate && PYTHONPATH=packages:. uvicorn apps.api.main:app --reload --port 8000";
+  "Cannot reach the PayIntel API on port 8000. From the repo root run: source .venv/bin/activate && PYTHONPATH=packages:. uvicorn apps.api.main:app --reload --port 8000";
 
 function isJsonResponse(response: Response): boolean {
   return (response.headers.get("content-type") || "").includes("application/json");
@@ -108,6 +116,64 @@ export function getMerchantMetrics(merchantId: string): Promise<MerchantMetricsR
   return request(`/merchants/${merchantId}/metrics`);
 }
 
-export function getApiHealth(): Promise<{ status: string; environment: string }> {
+export function getMerchantRisk(merchantId: string): Promise<MerchantRiskScore> {
+  return request(`/merchants/${merchantId}/risk`);
+}
+
+export function getMerchantRegression(merchantId: string): Promise<RegressionScore> {
+  return request(`/merchants/${merchantId}/ml/regression`);
+}
+
+export function postRiskWhatIf(
+  merchantId: string,
+  payload: {
+    method_id: string;
+    amount_cents: number;
+    prior_fail_rate?: number;
+  },
+): Promise<RiskWhatIfScore> {
+  return request(`/merchants/${merchantId}/risk/what-if`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getApiHealth(): Promise<{ status: string; environment: string; version?: string }> {
   return request("/health");
+}
+
+export function getReady(): Promise<{ status: string; database: string; environment: string }> {
+  return request("/health/ready");
+}
+
+export function getSystemHealth(): Promise<SystemHealthResponse> {
+  return request("/health/services");
+}
+
+export function listInvestigations(): Promise<InvestigationListResponse> {
+  return request("/investigations");
+}
+
+export function listDocuments(): Promise<CorpusResponse> {
+  return request("/documents");
+}
+
+export function listTransfers(): Promise<TransferResult[]> {
+  return request("/transactions/transfers");
+}
+
+export function getLedgerAccounts(): Promise<LedgerAccountsResponse> {
+  return request("/transactions/accounts");
+}
+
+export function postLedgerTransfer(payload: {
+  from_account_id: string;
+  to_account_id: string;
+  amount_cents: number;
+  fail_at?: "after_debit" | "after_credit" | "after_ledger" | "before_commit" | null;
+}): Promise<TransferResult> {
+  return request("/transactions/transfers", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }

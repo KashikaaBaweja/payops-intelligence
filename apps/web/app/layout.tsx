@@ -15,8 +15,8 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata = {
-  title: "PayOps Investigation Console",
-  description: "Internal payment operations investigation dashboard",
+  title: "PayIntel AI",
+  description: "Agentic payment intelligence and research console",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

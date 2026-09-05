@@ -2,6 +2,11 @@ import type { MetricResult } from "./types";
 
 export const SAMPLE_QUESTIONS = [
   {
+    label: "Settlement delays",
+    question: "Why did settlement delays increase for merchants in the last quarter?",
+    merchant_id: "M102",
+  },
+  {
     label: "M102 UPI GATEWAY_TIMEOUT",
     question: "Why did Harbor Retail M102 UPI payments fail with GATEWAY_TIMEOUT?",
     merchant_id: "M102",
@@ -24,6 +29,21 @@ export const SAMPLE_QUESTIONS = [
   {
     label: "M102 health scorecard",
     question: "Merchant health scorecard for Harbor Retail M102",
+    merchant_id: "M102",
+  },
+  {
+    label: "M102 predicted risk",
+    question: "What is the predicted payment risk and expected loss for M102?",
+    merchant_id: "M102",
+  },
+  {
+    label: "M102 capture latency",
+    question: "What is the predicted capture latency for M102?",
+    merchant_id: "M102",
+  },
+  {
+    label: "M102 transaction integrity",
+    question: "Are Harbor Retail M102 payments transactionally consistent under ACID invariants?",
     merchant_id: "M102",
   },
 ] as const;
