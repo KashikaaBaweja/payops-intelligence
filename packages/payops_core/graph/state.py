@@ -24,6 +24,10 @@ class InvestigationState(TypedDict, total=False):
     """Shared graph state. Values are structured models, not free-text reasoning."""
 
     question: str
+    input_method: str
+    query_language: str
+    response_language: str
+    retrieval_query: str | None
     merchant_id: str | None
     time_window: TimeWindow | None
     plan: InvestigationPlan | None

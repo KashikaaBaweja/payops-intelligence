@@ -35,6 +35,9 @@ class WriterAgent:
         error: str | None = None,
         timed_out: bool = False,
         retrieval: RetrievalSummary | None = None,
+        query_language: str = "en",
+        response_language: str = "en",
+        retrieval_query: str | None = None,
     ) -> IncidentReport:
         known = set(evidence.ids())
         sufficient = bool(sufficiency and sufficiency.sufficient and not timed_out and not error)
@@ -68,7 +71,7 @@ class WriterAgent:
             )
         if not sufficient:
             findings.append("Evidence was insufficient for a confident root cause.")
-        summary = _summary(question, sufficient, cause, timed_out, error)
+        summary = _summary(question, sufficient, cause, timed_out, error, response_language)
         confidence = cause.confidence if sufficient else min(cause.confidence, 0.3)
         if any("weak" in claim.issues for claim in claims):
             confidence = min(confidence, 0.4)
@@ -84,11 +87,17 @@ class WriterAgent:
             likely_cause=cause,
             alternative_hypotheses=hypotheses[1:3],
             confidence=confidence,
-            recommended_actions=_actions(sufficient, cause.category),
+            recommended_actions=_actions(sufficient, cause.category, response_language),
             sources=refs,
             agent_execution_summary=trace,
             evidence_sufficient=sufficient,
             retrieval=retrieval,
+            original_query=question,
+            query_language=query_language if query_language in {"en", "hi", "hi-latn"} else "en",
+            response_language=(
+                response_language if response_language in {"en", "hi", "hi-latn"} else "en"
+            ),
+            retrieval_query=retrieval_query,
         )
 
 
@@ -174,7 +183,24 @@ def _summary(
     cause: Hypothesis,
     timed_out: bool,
     error: str | None,
+    language: str = "en",
 ) -> str:
+    if language == "hi":
+        if timed_out:
+            return f"समय समाप्त: {question}"
+        if error:
+            return f"जाँच असफल: {question}"
+        if not sufficient:
+            return f"अधूरी जाँच: {question}"
+        return f"'{question}' की जाँच से संकेत: {cause.cause}."
+    if language == "hi-latn":
+        if timed_out:
+            return f"Timeout ho gaya: {question}"
+        if error:
+            return f"Investigation fail ho gayi: {question}"
+        if not sufficient:
+            return f"Incomplete investigation: {question}"
+        return f"'{question}' ki investigation {cause.cause} ki taraf point karti hai."
     if timed_out:
         return f"Timed out while investigating: {question}"
     if error:
@@ -205,7 +231,15 @@ def _severity(metrics: list[MetricResult], evidence: EvidenceBundle, sufficient:
     return "low"
 
 
-def _actions(sufficient: bool, category: str) -> list[str]:
+def _actions(sufficient: bool, category: str, language: str = "en") -> list[str]:
+    if language == "hi":
+        if not sufficient:
+            return ["मूल कारण बताने से पहले और साक्ष्य एकत्र करें।"]
+        return ["उद्धृत साक्ष्य की जाँच करें"]
+    if language == "hi-latn":
+        if not sufficient:
+            return ["Root cause naam karne se pehle aur evidence collect karein."]
+        return ["Cited evidence ko ops ke saath review karein"]
     if not sufficient:
         return ["Collect additional evidence before naming a root cause."]
     if category == "processor":

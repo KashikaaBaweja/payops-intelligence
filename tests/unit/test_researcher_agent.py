@@ -81,6 +81,15 @@ def test_hindi_question_expands_and_retrieves() -> None:
     assert "GATEWAY_TIMEOUT" in combined
 
 
+def test_refund_policy_query_retrieves_policy_document() -> None:
+    agent = _agent()
+    queries = agent.formulate_queries("Summarize the refund policy.")
+    assert queries
+    assert queries[0].doc_type == "refund_policy"
+    result = agent.research("Summarize the refund policy.")
+    assert "refund-policy" in {item.doc_id for item in result.evidence.items}
+
+
 def test_researcher_only_runs_retrieve_docs_tasks() -> None:
     agent = _agent()
     task = Task(

@@ -17,7 +17,13 @@ from payops_core.models.schemas import (
     SearchQuery,
     SourceCitation,
 )
-from payops_core.rag.analysis import ERROR_CODES, OPPOSITE_CODES, analyze_query, codes_in
+from payops_core.rag.analysis import (
+    ERROR_CODES,
+    OPPOSITE_CODES,
+    TOPIC_HINTS,
+    analyze_query,
+    codes_in,
+)
 from payops_core.rag.relevance import relevance_score, rerank
 from payops_core.rag.rewrite import rewrite_query
 
@@ -191,6 +197,18 @@ def _to_evidence(
     return item.model_copy(update={"score": score, "metadata": metadata})
 
 
+def _item_doc_type(item: EvidenceItem) -> str | None:
+    value = (item.metadata or {}).get("doc_type")
+    return str(value) if value else None
+
+
+def _topic_doc_type(topic: str) -> str | None:
+    for _needles, _query, doc_type, name in TOPIC_HINTS:
+        if name == topic:
+            return doc_type
+    return None
+
+
 def _missing_facets(analysis: QueryAnalysis, kept: dict[str, EvidenceItem]) -> list[str]:
     if not analysis.facets:
         return []
@@ -200,7 +218,13 @@ def _missing_facets(analysis: QueryAnalysis, kept: dict[str, EvidenceItem]) -> l
         if code not in blob:
             missing.append(code)
     lower = blob.lower()
+    kept_types = {doc_type for item in kept.values() if (doc_type := _item_doc_type(item))}
     for topic in analysis.topics:
+        expected = _topic_doc_type(topic)
+        if expected:
+            if expected not in kept_types:
+                missing.append(topic)
+            continue
         if topic not in lower:
             missing.append(topic)
     return missing

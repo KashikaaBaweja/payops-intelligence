@@ -75,8 +75,8 @@ services:
         ]
       interval: 10s
       timeout: 5s
-      retries: 8
-      start_period: 20s
+      retries: 12
+      start_period: 40s
     restart: unless-stopped
 
 volumes:

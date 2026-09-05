@@ -66,22 +66,30 @@ class ResearcherAgent:
             queries.append(SearchQuery(query=cleaned, doc_type=doc_type, rationale=rationale))
 
         expanded = expand_query(question)
-        if task is not None and task.query:
-            add(task.query, None, "planner-provided retrieve_docs query")
-        add(question, None, "original research question")
-        if expanded != question:
-            add(expanded, None, "glossary-expanded research question")
-
         compact = expanded.upper().replace("-", "_")
+        tokens = tokens_of(expanded)
+
+        # Specific catalog / topic queries first. The agentic loop stops as soon as
+        # kept evidence covers the detected topics, so an unfiltered first search
+        # can keep a lexical neighbor (refunds-faq, error-codes) and never run the
+        # refund_policy / runbook / webhook_docs filter.
         for code in ERROR_CODES:
             if code in compact:
                 add(code, "error_codes", f"error-code catalog for {code}")
                 add(f"{code} processor incident", "runbook", f"failure runbook for {code}")
 
-        tokens = tokens_of(expanded)
+        matched: list[tuple[str | None, str, str]] = []
         for needles, extra_query, doc_type, topic in TOPIC_HINTS:
             if tokens & needles:
+                matched.append((doc_type, extra_query, topic))
                 add(extra_query, doc_type, topic)
+
+        inferred = matched[0][0] if len(matched) == 1 else None
+        if task is not None and task.query:
+            add(task.query, inferred, "planner-provided retrieve_docs query")
+        add(question, inferred, "original research question")
+        if expanded != question:
+            add(expanded, inferred, "glossary-expanded research question")
         return queries
 
     def _is_relevant(self, question: str, query: SearchQuery, hit: RetrievalHit) -> bool:

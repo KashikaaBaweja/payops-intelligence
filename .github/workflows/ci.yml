@@ -47,14 +47,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Compose up
         run: |
-          if ! docker compose -f docker/docker-compose.yml up --build -d; then
+          if ! docker compose -f docker/docker-compose.yml up --build -d --wait; then
             docker compose -f docker/docker-compose.yml logs
             exit 1
           fi
-      - name: Wait for API readiness
+      - name: Wait for API and web readiness
         run: |
           for i in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:8000/health/ready >/dev/null; then
+            if curl -fsS http://127.0.0.1:8000/health/ready >/dev/null \
+              && curl -fsS http://127.0.0.1:3001/health >/dev/null; then
               exit 0
             fi
             sleep 2
@@ -64,11 +65,15 @@ jobs:
       - name: Smoke
         run: |
           curl -fsS http://127.0.0.1:8000/health
+          echo
           curl -fsS http://127.0.0.1:8000/health/ready
+          echo
           curl -fsS http://127.0.0.1:3001/health
+          echo
           curl -fsS -c /tmp/payintel.cj -X POST http://127.0.0.1:8000/auth/signup \
             -H 'Content-Type: application/json' \
             -d '{"name":"CI Operator","email":"ci@payintel.test","password":"Testuser1!x","confirm_password":"Testuser1!x"}'
+          echo
           curl -fsS -b /tmp/payintel.cj -X POST http://127.0.0.1:8000/investigations \
             -H 'Content-Type: application/json' \
             -d '{"question":"What does GATEWAY_TIMEOUT mean?","max_iterations":2}' \

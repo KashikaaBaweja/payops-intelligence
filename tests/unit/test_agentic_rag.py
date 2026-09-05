@@ -24,7 +24,7 @@ def _timeout_hit(**kwargs) -> RetrievalHit:
         "section": "GATEWAY_TIMEOUT",
         "text": "GATEWAY_TIMEOUT means the method processor did not respond.",
         "score": 0.91,
-        "metadata": {"doc_id": "error-codes"},
+        "metadata": {"doc_id": "error-codes", "doc_type": "error_codes"},
     }
     payload.update(kwargs)
     return RetrievalHit(**payload)
@@ -56,7 +56,7 @@ def test_insufficient_evidence_rejects_irrelevant_hits() -> None:
 
 
 def test_query_rewriting_after_empty_first_search() -> None:
-    hit = _timeout_hit()
+    hit = _timeout_hit(metadata={"doc_id": "error-codes", "doc_type": "runbook"})
     retriever = _ScriptedRetriever([[], [hit]])
     result = ResearcherAgent(retriever).research("What does GATEWAY_TIMEOUT mean?")
     assert result.rag is not None
@@ -99,7 +99,7 @@ def test_conflicting_sources_are_flagged_not_resolved() -> None:
         section="INSUFFICIENT_FUNDS",
         text="INSUFFICIENT_FUNDS is an issuer decline, not a processor timeout.",
         score=0.9,
-        metadata={"doc_id": "issuer-declines"},
+        metadata={"doc_id": "issuer-declines", "doc_type": "error_codes"},
     )
     rag = run_agentic_rag(
         "Compare GATEWAY_TIMEOUT and INSUFFICIENT_FUNDS",
